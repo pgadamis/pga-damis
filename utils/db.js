@@ -337,7 +337,6 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_notif_user    ON notifications(user_id, is_read);
   CREATE INDEX IF NOT EXISTS idx_users_phone   ON users(phone);
   CREATE INDEX IF NOT EXISTS idx_users_email   ON users(email);
-  CREATE INDEX IF NOT EXISTS idx_users_status  ON users(account_status, is_active);
 `);
 
 // ── Safe migrations (ALTER TABLE is idempotent via try/catch) ─────────
@@ -1871,6 +1870,14 @@ migrate(`ALTER TABLE utility_bills ADD COLUMN image_url TEXT DEFAULT ''`);
 migrate(`ALTER TABLE deleted_users ADD COLUMN semester_tag TEXT DEFAULT ''`);
 // Per-user admission slip serial counter (reset each semester rollover)
 migrate(`ALTER TABLE users ADD COLUMN admission_no TEXT DEFAULT ''`);
+
+// idx_users_status depends on account_status, which is only guaranteed to exist
+// once the migration above (and the account_status migration earlier in this
+// file) has run — so this index is created here, after migrations, instead of
+// in the initial db.exec() schema block. Creating it earlier breaks on a fresh
+// database where the users table hasn't been ALTERed yet.
+db.exec(`CREATE INDEX IF NOT EXISTS idx_users_status ON users(account_status, is_active);`);
+
 // Seed default app_settings for semester management (only if not already set)
 db.prepare(`INSERT OR IGNORE INTO app_settings (key, value) VALUES ('current_semester', '1st Semester')`).run();
 db.prepare(`INSERT OR IGNORE INTO app_settings (key, value) VALUES ('school_year', '${new Date().getFullYear()}')`).run();
