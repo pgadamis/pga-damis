@@ -27,6 +27,8 @@ const {
   createMaintenanceRequest, getMaintenanceRequests, updateMaintenanceRequest, getMaintenanceStats,
   upsertUtilityBill, getUtilityBills, getUtilityTrend,
   nextAdmissionNo, semesterRollover,
+  // DB Archives (full snapshots)
+  createDbArchive, getDbArchives, getDbArchiveById, deleteDbArchiveById,
 } = require('../utils/db');
 const { sendAccountApprovedEmail, sendAccountRejectedEmail } = require('../utils/emailService');
 const { multerUpload, toCloudinary, resizeImage, hasCloudinary } = require('../middleware/upload');
@@ -1678,19 +1680,48 @@ router.put('/api/admin/semester', requireAdmin, (req, res) => {
 
 /**
  * POST /api/admin/semester/rollover
- * Archives all current residents to deleted_users with semester_tag,
- * resets admission counter, and updates semester settings.
+ * Snapshots the full live DB into the Archive DB "closet" (see snapshotLiveDb
+ * below), THEN archives all current residents to deleted_users with
+ * semester_tag, resets admission counter, and updates semester settings.
+ * The snapshot happens first so it captures the closing semester's full
+ * state (residents + rooms + billing) before any rows are touched.
  * Body: { newSemester, schoolYear, slipValidTo }
  */
-router.post('/api/admin/semester/rollover', requireAdmin, (req, res) => {
+router.post('/api/admin/semester/rollover', requireAdmin, async (req, res) => {
   try {
     const { newSemester, schoolYear, slipValidTo } = req.body;
     if (!newSemester || !schoolYear) return res.status(400).json({ error: 'newSemester and schoolYear are required.' });
+
+    // Snapshot BEFORE rollover mutates anything, so the archive reflects the
+    // closing semester's full data — not the post-rollover, residents-removed state.
+    const outgoingSemester = getSetting('current_semester', '1st Semester');
+    const outgoingYear     = getSetting('school_year', String(schoolYear));
+    const residentCountBefore = db.prepare(
+      `SELECT COUNT(*) AS c FROM users WHERE account_status = 'approved' AND role = 'user'`
+    ).get().c;
+
+    let dbBackupWarning = null;
+    try {
+      await snapshotLiveDb({
+        label: `${outgoingSemester} ${outgoingYear}`,
+        semesterTag: `${outgoingSemester} ${outgoingYear}`,
+        reason: 'semester_rollover',
+        residentCount: residentCountBefore,
+        adminId: req.user.id,
+      });
+    } catch (backupErr) {
+      // Non-fatal: don't block the semester from starting just because the
+      // snapshot upload hiccuped. Surface it loudly so the admin knows to
+      // grab a manual backup instead.
+      dbBackupWarning = `Automatic DB snapshot failed: ${backupErr.message}. Consider downloading a manual backup from Backup & Restore.`;
+      log.error(`⚠ Semester rollover: automatic DB snapshot failed — ${backupErr.message}`);
+    }
+
     const result = semesterRollover(newSemester, schoolYear, slipValidTo || '', req.user.id);
     logAdminAction(req.user.id, 'semester_rollover', 'system', null,
       `${newSemester} SY${schoolYear} — archived ${result.archived} residents`);
     log.admin(`🔄 SEMESTER ROLLOVER → ${newSemester} SY${schoolYear} | archived=${result.archived} skipped=${result.skipped} — by @${req.user.username}`);
-    res.json({ success: true, ...result, newSemester, schoolYear });
+    res.json({ success: true, ...result, newSemester, schoolYear, dbBackupWarning });
   } catch (err) { send500(res, err); }
 });
 
@@ -1843,6 +1874,189 @@ router.get('/api/admin/users/:id/admission-slip', requireAdmin, async (req, res)
     logAdminAction(req.user.id, 'admission_slip_generated', 'user', userId,
       `@${row.username} — slip #${admissionNo} ${semester} SY${schoolYear}`);
     log.admin(`📄 Admission slip generated for @${row.username} #${admissionNo} — by @${req.user.username}`);
+  } catch (err) { send500(res, err); }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// DB ARCHIVES — the "closet" of full .db snapshots
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * Take a hot backup of the live DB and store it as a saved snapshot:
+ * uploaded to Cloudinary (raw resource, survives Railway redeploys) when
+ * configured, otherwise kept on local disk under DATA_DIR/db-archives as a
+ * dev-mode fallback. Always cleans up its own temp file.
+ *
+ * Called automatically by /api/admin/semester/rollover, and by the manual
+ * "Save Snapshot Now" button on the Archive DB tab.
+ */
+async function snapshotLiveDb({ label, semesterTag = '', reason = 'semester_rollover', residentCount = 0, adminId = '' }) {
+  const path = require('path');
+  const os   = require('os');
+  const fs   = require('fs');
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const fileName  = `damis-archive-${timestamp}.db`;
+  const tmpPath   = path.join(os.tmpdir(), fileName);
+
+  await db.backup(tmpPath); // better-sqlite3 async backup — consistent even under write load
+  const fileSizeBytes = fs.statSync(tmpPath).size;
+
+  try {
+    let storage = 'local', fileUrl = '', cloudinaryPublicId = '';
+
+    if (hasCloudinary) {
+      const buffer = fs.readFileSync(tmpPath);
+      const uploaded = await toCloudinary(buffer, 'pga-damis/db-archives', {
+        resource_type: 'raw',
+        public_id: fileName.replace(/\.db$/, ''),
+      });
+      storage = 'cloudinary';
+      fileUrl = uploaded.secure_url;
+      cloudinaryPublicId = uploaded.public_id;
+    } else {
+      // Dev fallback — no Cloudinary configured, keep it on local disk.
+      const DATA_DIR   = process.env.DATA_DIR || path.join(__dirname, '..');
+      const archiveDir = path.join(DATA_DIR, 'db-archives');
+      fs.mkdirSync(archiveDir, { recursive: true });
+      const destPath = path.join(archiveDir, fileName);
+      fs.copyFileSync(tmpPath, destPath);
+      storage = 'local';
+      fileUrl = destPath;
+    }
+
+    const id = createDbArchive({
+      label, semesterTag, reason, residentCount, fileSizeBytes,
+      fileName, storage, fileUrl, cloudinaryPublicId, createdBy: adminId,
+    });
+    log.admin(`📦 DB snapshot saved: "${label}" (${(fileSizeBytes / 1024 / 1024).toFixed(2)} MB, ${storage})`);
+    return id;
+  } finally {
+    fs.unlink(tmpPath, () => {});
+  }
+}
+
+/** GET /api/admin/db-archives — list all saved snapshots, newest first */
+router.get('/api/admin/db-archives', requireAdmin, (req, res) => {
+  try {
+    res.json({ archives: getDbArchives() });
+  } catch (err) { send500(res, err); }
+});
+
+/**
+ * POST /api/admin/db-archives/manual
+ * Saves a snapshot on demand (outside of a semester rollover), so admins
+ * can stock the closet whenever they want without waiting for a rollover.
+ * Body: { label }
+ */
+router.post('/api/admin/db-archives/manual', requireAdmin, async (req, res) => {
+  try {
+    const label = (req.body?.label || '').trim() ||
+      `Manual snapshot ${new Date().toISOString().slice(0, 10)}`;
+    const residentCount = db.prepare(
+      `SELECT COUNT(*) AS c FROM users WHERE account_status = 'approved' AND role = 'user'`
+    ).get().c;
+
+    const id = await snapshotLiveDb({ label, reason: 'manual', residentCount, adminId: req.user.id });
+    logAdminAction(req.user.id, 'db_archive_saved', 'system', id, label);
+    res.json({ success: true, id });
+  } catch (err) { send500(res, err); }
+});
+
+/** GET /api/admin/db-archives/:id/download — stream a saved snapshot back to the browser */
+router.get('/api/admin/db-archives/:id/download', requireAdmin, async (req, res) => {
+  try {
+    const rec = getDbArchiveById(req.params.id);
+    if (!rec) return res.status(404).json({ error: 'Archive not found.' });
+
+    const fs = require('fs');
+    const downloadName = rec.file_name || `${rec.label.replace(/\s+/g, '_')}.db`;
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+
+    if (rec.storage === 'cloudinary') {
+      const upstream = await fetch(rec.file_url);
+      if (!upstream.ok) throw new Error(`Cloudinary fetch failed (${upstream.status})`);
+      res.end(Buffer.from(await upstream.arrayBuffer()));
+    } else {
+      if (!fs.existsSync(rec.file_url)) return res.status(404).json({ error: 'Archive file is missing from local disk.' });
+      fs.createReadStream(rec.file_url).pipe(res);
+    }
+
+    logAdminAction(req.user.id, 'db_archive_downloaded', 'system', rec.id, rec.label);
+    log.admin(`💾 DB archive downloaded: "${rec.label}" — by @${req.user.username}`);
+  } catch (err) { send500(res, err); }
+});
+
+/**
+ * POST /api/admin/db-archives/:id/restore
+ * Loads a saved snapshot back in as the live DB — same mechanism as
+ * /api/admin/backup/restore, just sourced from the closet instead of an
+ * upload. Destructive: overwrites all current data.
+ */
+router.post('/api/admin/db-archives/:id/restore', requireAdmin, async (req, res) => {
+  try {
+    const rec = getDbArchiveById(req.params.id);
+    if (!rec) return res.status(404).json({ error: 'Archive not found.' });
+
+    const path = require('path');
+    const os   = require('os');
+    const fs   = require('fs');
+    const Database = require('better-sqlite3');
+
+    const tmpPath = path.join(os.tmpdir(), `damis-archive-restore-${Date.now()}.db`);
+
+    if (rec.storage === 'cloudinary') {
+      const upstream = await fetch(rec.file_url);
+      if (!upstream.ok) throw new Error(`Cloudinary fetch failed (${upstream.status})`);
+      fs.writeFileSync(tmpPath, Buffer.from(await upstream.arrayBuffer()));
+    } else {
+      if (!fs.existsSync(rec.file_url)) return res.status(404).json({ error: 'Archive file is missing from local disk.' });
+      fs.copyFileSync(rec.file_url, tmpPath);
+    }
+
+    // Validate before touching the live DB
+    try {
+      const checkDb = new Database(tmpPath, { readonly: true });
+      checkDb.prepare('SELECT COUNT(*) FROM users').get();
+      checkDb.close();
+    } catch (e) {
+      fs.unlink(tmpPath, () => {});
+      return res.status(400).json({ error: `Archived file appears corrupt: ${e.message}` });
+    }
+
+    const DATA_DIR   = process.env.DATA_DIR || path.join(__dirname, '..');
+    const liveDbPath = path.join(DATA_DIR, 'connecthub.db');
+    const srcDb = new Database(tmpPath, { readonly: true });
+    await srcDb.backup(liveDbPath);
+    srcDb.close();
+    fs.unlink(tmpPath, () => {});
+
+    log.admin(`♻ DB RESTORED from archive "${rec.label}" — by @${req.user.username}`);
+    // No logAdminAction here — the admin_logs table just got replaced by the restore.
+    res.json({ success: true, message: `Database restored from "${rec.label}". The server will continue running with the restored data.` });
+  } catch (err) { send500(res, err); }
+});
+
+/** DELETE /api/admin/db-archives/:id — purge a saved snapshot and free its storage */
+router.delete('/api/admin/db-archives/:id', requireAdmin, async (req, res) => {
+  try {
+    const rec = getDbArchiveById(req.params.id);
+    if (!rec) return res.status(404).json({ error: 'Archive not found.' });
+
+    if (rec.storage === 'cloudinary' && rec.cloudinary_public_id) {
+      try {
+        const cloudinary = require('cloudinary').v2;
+        await cloudinary.uploader.destroy(rec.cloudinary_public_id, { resource_type: 'raw' });
+      } catch (e) { log.warn(`Cloudinary purge failed (non-fatal): ${e.message}`); }
+    } else if (rec.storage === 'local' && rec.file_url) {
+      require('fs').unlink(rec.file_url, () => {});
+    }
+
+    deleteDbArchiveById(rec.id);
+    logAdminAction(req.user.id, 'db_archive_purged', 'system', rec.id, rec.label);
+    log.admin(`🗑 DB archive purged: "${rec.label}" — by @${req.user.username}`);
+    res.json({ success: true });
   } catch (err) { send500(res, err); }
 });
 

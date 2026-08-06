@@ -98,6 +98,7 @@
     <div class="nav-item" id="nav-logs" onclick="showTab('logs')"><i class="fa-solid fa-list-check w-4"></i>Audit Logs</div>
     <div class="nav-item" id="nav-ai-log" onclick="showTab('ai-log')"><i class="fa-solid fa-robot w-4"></i>AI Log</div>
     <div class="nav-item" id="nav-backup" onclick="showTab('backup')"><i class="fa-solid fa-database w-4"></i>Backup &amp; Restore</div>
+    <div class="nav-item" id="nav-db-archives" onclick="showTab('db-archives')"><i class="fa-solid fa-boxes-stacked w-4"></i>Archive DB</div>
   </nav>
   <div class="p-3 border-t border-white/10 space-y-1">
     <div id="admin-info" class="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/5 mb-1">
@@ -1165,10 +1166,49 @@
     <div class="mt-6 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-4 max-w-3xl">
       <p class="text-xs text-amber-800 dark:text-amber-300 font-semibold flex items-center gap-2 mb-1"><i class="fa-solid fa-triangle-exclamation"></i>Important notes</p>
       <ul class="text-xs text-amber-700 dark:text-amber-400 space-y-1 list-disc list-inside">
-        <li>Download a backup before every semester rollover.</li>
-        <li>Restore is only available to superadmin accounts.</li>
+        <li>Every semester rollover now auto-saves a full snapshot to the <strong>Archive DB</strong> tab — you don't need to download one manually first.</li>
+        <li>This page is for on-demand backups you want to keep locally, or restoring from a file on your computer.</li>
         <li>After restoring, the server continues running with the restored data immediately — no restart needed.</li>
         <li>Uploaded files are validated as SQLite databases before any changes are made.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ═══ ARCHIVE DB (closet of full .db snapshots) ═══ -->
+  <div id="tab-db-archives" class="tab-content">
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+      <div>
+        <h1 class="font-display font-bold text-2xl text-slate-900 dark:text-slate-100">Archive DB</h1>
+        <p class="text-sm text-slate-400 mt-0.5">Every "Archive &amp; Start New Semester" auto-saves a full database snapshot here — load or download any of them, even without a local copy.</p>
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <button onclick="saveManualDbArchive()" id="db-archive-save-btn" class="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"><i class="fa-solid fa-plus text-xs"></i>Save Snapshot Now</button>
+        <button onclick="loadDbArchives()" class="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors"><i class="fa-solid fa-rotate text-xs"></i>Refresh</button>
+      </div>
+    </div>
+
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead><tr class="text-left text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            <th class="px-4 py-3 font-semibold">Snapshot</th>
+            <th class="px-4 py-3 font-semibold">Residents</th>
+            <th class="px-4 py-3 font-semibold">Size</th>
+            <th class="px-4 py-3 font-semibold">Saved</th>
+            <th class="px-4 py-3 font-semibold">Actions</th>
+          </tr></thead>
+          <tbody id="db-archives-tbody"><tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mt-6 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/40 rounded-2xl p-4 max-w-3xl">
+      <p class="text-xs text-blue-800 dark:text-blue-300 font-semibold flex items-center gap-2 mb-1"><i class="fa-solid fa-circle-info"></i>How this works</p>
+      <ul class="text-xs text-blue-700 dark:text-blue-400 space-y-1 list-disc list-inside">
+        <li>A snapshot is taken automatically right before every semester rollover, capturing the closing semester's full data — residents, rooms, and billing — before anything is archived or deleted.</li>
+        <li>Snapshots marked <strong>Semester Rollover</strong> are auto-saved; <strong>Manual</strong> ones come from the "Save Snapshot Now" button.</li>
+        <li><strong>Load</strong> replaces the entire live database with that snapshot — this is destructive and cannot be undone.</li>
+        <li>Files are stored in Cloudinary so they survive redeploys, not on the server's local disk.</li>
       </ul>
     </div>
   </div>
@@ -1219,7 +1259,8 @@
 
     <p class="text-sm text-slate-600 dark:text-slate-400 mb-5">
       All <strong>approved residents</strong> will be moved to the Deleted Archive with the current semester tag.
-      They can be restored for re-enrollment (2nd Semester / Midyear). New settings will take effect immediately.
+      They can be restored for re-enrollment (2nd Semester / Midyear). A full database snapshot is also saved
+      automatically to the <strong>Archive DB</strong> tab before this happens. New settings will take effect immediately.
     </p>
 
     <div class="space-y-3 mb-5">
@@ -1242,7 +1283,7 @@
     </div>
 
     <div class="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 rounded-xl p-3 mb-5">
-      <p class="text-xs text-red-700 dark:text-red-400 font-semibold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>All current residents will be archived. Download a backup first if needed.</p>
+      <p class="text-xs text-red-700 dark:text-red-400 font-semibold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>All current residents will be archived. A full DB snapshot is saved automatically to Archive DB — no manual backup needed.</p>
     </div>
 
     <div class="flex gap-3">
@@ -1509,6 +1550,7 @@
     else if(tab==='maintenance'){ loadMaintenanceStats(); loadMaintenance(); }
     else if(tab==='utility'){ initUtilityMonth(); loadUtility(); loadUtilityChart(); }
     else if(tab==='backup'){ /* static page, no load needed */ }
+    else if(tab==='db-archives')loadDbArchives();
   }
 
   // ── Mobile sidebar ────────────────────────────────
@@ -3726,6 +3768,7 @@
       if (semVT)   semVT.value   = slipValidTo || '';
 
       toast(`✅ New semester started: ${newSemester} SY${schoolYear}. ${d.archived} residents archived.`);
+      if (d.dbBackupWarning) toast(d.dbBackupWarning, 'error');
       refreshAll();
     } catch (e) {
       toast('Rollover failed: ' + e.message, 'error');
@@ -3803,6 +3846,147 @@
         }
       }
     );
+  }
+
+  // ── ARCHIVE DB (closet of full .db snapshots) ────────
+  function fmtFileSize(bytes) {
+    bytes = Number(bytes) || 0;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  async function loadDbArchives() {
+    const tbody = document.getElementById('db-archives-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center"><div class="inline-block w-5 h-5 border-2 border-brand-400 border-t-transparent rounded-full animate-spin"></div></td></tr>';
+    try {
+      const r = await fetch('/api/admin/db-archives');
+      const d = await r.json();
+      renderDbArchives(d.archives || []);
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-red-400">${escHtml(e.message)}</td></tr>`;
+    }
+  }
+
+  function renderDbArchives(archives) {
+    const tbody = document.getElementById('db-archives-tbody');
+    if (!tbody) return;
+    if (!archives.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No snapshots saved yet. They\'ll appear here after your next semester rollover, or click "Save Snapshot Now".</td></tr>';
+      return;
+    }
+    tbody.innerHTML = archives.map(a => {
+      const isManual = a.reason === 'manual';
+      const badge = isManual
+        ? '<span class="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-lg">Manual</span>'
+        : '<span class="text-xs font-semibold bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-lg">Semester Rollover</span>';
+      return `<tr class="border-b border-slate-50 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+        <td class="px-4 py-2.5">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-database text-slate-300 dark:text-slate-600"></i>
+            <div>
+              <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">${escHtml(a.label)}</p>
+              ${badge}
+            </div>
+          </div>
+        </td>
+        <td class="px-4 py-2.5 text-sm text-slate-600 dark:text-slate-300">${a.resident_count ?? '—'}</td>
+        <td class="px-4 py-2.5 text-xs text-slate-500">${fmtFileSize(a.file_size_bytes)}</td>
+        <td class="px-4 py-2.5 text-xs text-slate-400">${reltime(a.created_at)}</td>
+        <td class="px-4 py-2.5">
+          <div class="flex gap-1 flex-wrap">
+            <button onclick="downloadDbArchive('${a.id}','${escJS(a.label)}')"
+              class="text-xs font-semibold text-green-600 hover:bg-green-50 dark:hover:bg-green-950 px-2 py-1 rounded-lg border border-green-200 dark:border-green-800 transition-colors">
+              <i class="fa-solid fa-download mr-1"></i>Download
+            </button>
+            <button onclick="restoreDbArchive('${a.id}','${escJS(a.label)}')"
+              class="text-xs font-semibold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800 transition-colors">
+              <i class="fa-solid fa-rotate mr-1"></i>Load
+            </button>
+            <button onclick="deleteDbArchive('${a.id}','${escJS(a.label)}')"
+              class="text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950 px-2 py-1 rounded-lg border border-red-200 dark:border-red-800 transition-colors">
+              <i class="fa-solid fa-trash mr-1"></i>Delete
+            </button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function saveManualDbArchive() {
+    const label = prompt('Label for this snapshot (optional):', `Manual snapshot ${dayjs().format('MMM D, YYYY')}`);
+    if (label === null) return; // cancelled
+    const btn = document.getElementById('db-archive-save-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin mr-2"></i>Saving…'; }
+    try {
+      const r = await fetch('/api/admin/db-archives/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label }),
+      });
+      const d = await r.json();
+      if (!r.ok || d.error) throw new Error(d.error || r.statusText);
+      toast('Snapshot saved ✅');
+      loadDbArchives();
+    } catch (e) {
+      toast('Snapshot failed: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus mr-2"></i>Save Snapshot Now'; }
+    }
+  }
+
+  async function downloadDbArchive(id, label) {
+    try {
+      const r = await fetch(`/api/admin/db-archives/${id}/download`);
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.error || r.statusText);
+      }
+      const blob = await r.blob();
+      const cd = r.headers.get('Content-Disposition') || '';
+      const nameMatch = cd.match(/filename="([^"]+)"/);
+      const fileName = nameMatch ? nameMatch[1] : `${label}.db`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast(`Downloaded "${label}" ✅`);
+    } catch (e) {
+      toast('Download failed: ' + e.message, 'error');
+    }
+  }
+
+  function restoreDbArchive(id, label) {
+    showConfirm('Load Snapshot',
+      `⚠ This will REPLACE the entire live database with "${label}". All current data will be overwritten. This cannot be undone. Are you sure?`,
+      async () => {
+        try {
+          const r = await fetch(`/api/admin/db-archives/${id}/restore`, { method: 'POST' });
+          const d = await r.json();
+          if (!r.ok || d.error) throw new Error(d.error || r.statusText);
+          toast(`Database restored from "${label}" ✅ Reloading in 3s…`);
+          setTimeout(() => location.reload(), 3000);
+        } catch (e) {
+          toast('Load failed: ' + e.message, 'error');
+        }
+      }
+    );
+  }
+
+  function deleteDbArchive(id, label) {
+    showConfirm('Delete Snapshot', `Permanently delete "${label}" from the archive? This cannot be undone.`, async () => {
+      try {
+        const r = await fetch(`/api/admin/db-archives/${id}`, { method: 'DELETE' });
+        const d = await r.json();
+        if (!r.ok || d.error) throw new Error(d.error || r.statusText);
+        toast(`"${label}" deleted.`, 'info');
+        loadDbArchives();
+      } catch (e) {
+        toast('Delete failed: ' + e.message, 'error');
+      }
+    });
   }
 
   // ── REGISTRATION SUB-TABS ────────────────────────
