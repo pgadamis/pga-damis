@@ -1209,6 +1209,7 @@
         <li>Snapshots marked <strong>Semester Rollover</strong> are auto-saved; <strong>Manual</strong> ones come from the "Save Snapshot Now" button.</li>
         <li><strong>Load</strong> replaces the entire live database with that snapshot — this is destructive and cannot be undone.</li>
         <li>Files are stored in Cloudinary so they survive redeploys, not on the server's local disk.</li>
+        <li>This list itself is tracked separately from the live database, so restoring or loading a snapshot never removes anything from this page.</li>
       </ul>
     </div>
   </div>
@@ -3881,13 +3882,14 @@
       const badge = isManual
         ? '<span class="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-lg">Manual</span>'
         : '<span class="text-xs font-semibold bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-lg">Semester Rollover</span>';
+      const byline = a.created_by_username ? `<span class="text-xs text-slate-400 ml-1">by @${escHtml(a.created_by_username)}</span>` : '';
       return `<tr class="border-b border-slate-50 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
         <td class="px-4 py-2.5">
           <div class="flex items-center gap-2">
             <i class="fa-solid fa-database text-slate-300 dark:text-slate-600"></i>
             <div>
               <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">${escHtml(a.label)}</p>
-              ${badge}
+              ${badge}${byline}
             </div>
           </div>
         </td>

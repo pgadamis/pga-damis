@@ -1858,11 +1858,15 @@ db.prepare(`CREATE TABLE IF NOT EXISTS utility_bills (
 db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_utility_month_type ON utility_bills(month, type)`).run();
 
 // ── DB Archives (full .db snapshots — the "closet" of old databases) ───────────
-// One row per saved snapshot. The actual file lives in Cloudinary (raw resource)
-// so it survives Railway redeploys; falls back to local disk under DATA_DIR if
-// Cloudinary isn't configured (dev mode). Auto-created on every semester
-// rollover; admins can also trigger one manually from the Archive DB tab.
-db.prepare(`CREATE TABLE IF NOT EXISTS db_archives (
+// CRITICAL: this registry must NOT live inside connecthub.db. Restoring a
+// backup (from Backup & Restore, or "Load" on a saved snapshot) replaces the
+// entire connecthub.db file — if this table lived there, every restore would
+// silently rewind (or wipe) the list of saved snapshots along with it. So the
+// registry gets its own separate SQLite file that restores never touch.
+const ARCHIVE_REGISTRY_PATH = path.join(DATA_DIR, 'db_archives_registry.db');
+const archiveRegistryDb = new Database(ARCHIVE_REGISTRY_PATH);
+archiveRegistryDb.pragma('journal_mode = WAL');
+archiveRegistryDb.prepare(`CREATE TABLE IF NOT EXISTS db_archives (
   id                    TEXT PRIMARY KEY,
   label                 TEXT NOT NULL,               -- e.g. "1st Semester 2026"
   semester_tag          TEXT DEFAULT '',
@@ -1874,9 +1878,10 @@ db.prepare(`CREATE TABLE IF NOT EXISTS db_archives (
   file_url              TEXT DEFAULT '',              -- Cloudinary secure_url OR local path
   cloudinary_public_id  TEXT DEFAULT '',
   created_by            TEXT DEFAULT '',
+  created_by_username   TEXT DEFAULT '',              -- denormalized: registry is a separate DB, can't JOIN users
   created_at            TEXT DEFAULT (datetime('now'))
 )`).run();
-db.prepare(`CREATE INDEX IF NOT EXISTS idx_db_archives_created ON db_archives(created_at DESC)`).run();
+archiveRegistryDb.prepare(`CREATE INDEX IF NOT EXISTS idx_db_archives_created ON db_archives(created_at DESC)`).run();
 
 // ── v2 feature migrations ─────────────────────────────────────────────────────
 // maintenance image attachment
@@ -2103,41 +2108,40 @@ function semesterRollover(newSemester, schoolYear, newSlipValidTo, adminId) {
 // The actual file I/O (backup, Cloudinary upload/fetch, restore) lives in
 // routes/admin.js next to the existing Backup & Restore endpoints — this
 // layer only tracks the metadata row so the "Archive DB" tab can list,
-// download, restore, and purge saved snapshots.
+// download, restore, and purge saved snapshots. Reads/writes go to
+// archiveRegistryDb (a separate file from connecthub.db — see above) so
+// restoring the live DB can never affect this list.
 
 function createDbArchive({
   label, semesterTag = '', reason = 'semester_rollover', residentCount = 0,
   fileSizeBytes = 0, fileName = '', storage = 'cloudinary', fileUrl = '',
-  cloudinaryPublicId = '', createdBy = '',
+  cloudinaryPublicId = '', createdBy = '', createdByUsername = '',
 }) {
   const id = genId();
-  db.prepare(`
+  archiveRegistryDb.prepare(`
     INSERT INTO db_archives
       (id, label, semester_tag, reason, resident_count, file_size_bytes,
-       file_name, storage, file_url, cloudinary_public_id, created_by)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+       file_name, storage, file_url, cloudinary_public_id, created_by, created_by_username)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     id, label, semesterTag, reason, residentCount, fileSizeBytes,
-    fileName, storage, fileUrl, cloudinaryPublicId, createdBy
+    fileName, storage, fileUrl, cloudinaryPublicId, createdBy, createdByUsername
   );
   return id;
 }
 
 function getDbArchives() {
-  return db.prepare(`
-    SELECT d.*, u.username AS created_by_username
-    FROM db_archives d
-    LEFT JOIN users u ON u.id = d.created_by
-    ORDER BY d.created_at DESC
+  return archiveRegistryDb.prepare(`
+    SELECT * FROM db_archives ORDER BY created_at DESC
   `).all();
 }
 
 function getDbArchiveById(id) {
-  return db.prepare('SELECT * FROM db_archives WHERE id = ?').get(id);
+  return archiveRegistryDb.prepare('SELECT * FROM db_archives WHERE id = ?').get(id);
 }
 
 function deleteDbArchiveById(id) {
-  return db.prepare('DELETE FROM db_archives WHERE id = ?').run(id);
+  return archiveRegistryDb.prepare('DELETE FROM db_archives WHERE id = ?').run(id);
 }
 
 module.exports = {

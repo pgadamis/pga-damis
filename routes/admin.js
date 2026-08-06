@@ -1708,6 +1708,7 @@ router.post('/api/admin/semester/rollover', requireAdmin, async (req, res) => {
         reason: 'semester_rollover',
         residentCount: residentCountBefore,
         adminId: req.user.id,
+        adminUsername: req.user.username || '',
       });
     } catch (backupErr) {
       // Non-fatal: don't block the semester from starting just because the
@@ -1890,7 +1891,7 @@ router.get('/api/admin/users/:id/admission-slip', requireAdmin, async (req, res)
  * Called automatically by /api/admin/semester/rollover, and by the manual
  * "Save Snapshot Now" button on the Archive DB tab.
  */
-async function snapshotLiveDb({ label, semesterTag = '', reason = 'semester_rollover', residentCount = 0, adminId = '' }) {
+async function snapshotLiveDb({ label, semesterTag = '', reason = 'semester_rollover', residentCount = 0, adminId = '', adminUsername = '' }) {
   const path = require('path');
   const os   = require('os');
   const fs   = require('fs');
@@ -1927,7 +1928,7 @@ async function snapshotLiveDb({ label, semesterTag = '', reason = 'semester_roll
 
     const id = createDbArchive({
       label, semesterTag, reason, residentCount, fileSizeBytes,
-      fileName, storage, fileUrl, cloudinaryPublicId, createdBy: adminId,
+      fileName, storage, fileUrl, cloudinaryPublicId, createdBy: adminId, createdByUsername: adminUsername,
     });
     log.admin(`📦 DB snapshot saved: "${label}" (${(fileSizeBytes / 1024 / 1024).toFixed(2)} MB, ${storage})`);
     return id;
@@ -1957,7 +1958,7 @@ router.post('/api/admin/db-archives/manual', requireAdmin, async (req, res) => {
       `SELECT COUNT(*) AS c FROM users WHERE account_status = 'approved' AND role = 'user'`
     ).get().c;
 
-    const id = await snapshotLiveDb({ label, reason: 'manual', residentCount, adminId: req.user.id });
+    const id = await snapshotLiveDb({ label, reason: 'manual', residentCount, adminId: req.user.id, adminUsername: req.user.username || '' });
     logAdminAction(req.user.id, 'db_archive_saved', 'system', id, label);
     res.json({ success: true, id });
   } catch (err) { send500(res, err); }
