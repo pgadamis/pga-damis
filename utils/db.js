@@ -425,6 +425,23 @@ db.prepare(`CREATE TABLE IF NOT EXISTS bed_assignments (
   UNIQUE(user_id)
 )`).run();
 
+// Room history — snapshot of every bed assignment that has ENDED (via unassign
+// or reassignment). The live/current assignment always lives in bed_assignments;
+// this table is the append-only trail of everywhere a resident has stayed before.
+db.prepare(`CREATE TABLE IF NOT EXISTS room_history (
+  id           TEXT PRIMARY KEY,
+  user_id      TEXT NOT NULL REFERENCES users(id),
+  room_id      INTEGER NOT NULL,
+  room_number  INTEGER NOT NULL,
+  bed_number   INTEGER NOT NULL,
+  assigned_at  TEXT NOT NULL,
+  assigned_by  TEXT,
+  removed_at   TEXT DEFAULT (datetime('now')),
+  removed_by   TEXT,
+  notes        TEXT DEFAULT ''
+)`).run();
+db.prepare(`CREATE INDEX IF NOT EXISTS idx_room_history_user ON room_history(user_id)`).run();
+
 db.prepare(`CREATE TABLE IF NOT EXISTS dorm_billing (
   id          TEXT PRIMARY KEY,
   user_id     TEXT NOT NULL REFERENCES users(id),
@@ -1667,8 +1684,36 @@ function assignBed(roomId, bedNumber, userId, assignedBy, notes) {
   ).run(randomUUID(), roomId, bedNumber, userId, assignedBy, notes||'');
 }
 
-function unassignBed(userId) {
-  return db.prepare('DELETE FROM bed_assignments WHERE user_id = ?').run(userId);
+function unassignBed(userId, removedBy, notes) {
+  // Log the outgoing assignment to room_history BEFORE deleting it, so the
+  // resident's stay in that room/bed is preserved for later lookup — this
+  // covers both a plain removal and a reassign (unassign old → assign new).
+  const current = db.prepare(
+    'SELECT ba.room_id, dr.room_number, ba.bed_number, ba.assigned_at, ba.assigned_by ' +
+    'FROM bed_assignments ba JOIN dorm_rooms dr ON dr.id = ba.room_id WHERE ba.user_id = ?'
+  ).get(userId);
+  const tx = db.transaction(() => {
+    if (current) {
+      db.prepare(
+        'INSERT INTO room_history (id, user_id, room_id, room_number, bed_number, assigned_at, assigned_by, removed_at, removed_by, notes) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, datetime(\'now\'), ?, ?)'
+      ).run(randomUUID(), userId, current.room_id, current.room_number, current.bed_number, current.assigned_at, current.assigned_by, removedBy || null, notes || '');
+    }
+    return db.prepare('DELETE FROM bed_assignments WHERE user_id = ?').run(userId);
+  });
+  return tx();
+}
+
+/** Room history for one resident — most recent stay first. */
+function getRoomHistory(userId) {
+  return db.prepare(
+    'SELECT h.*, a.first_name as removed_by_first_name, a.last_name as removed_by_last_name, ' +
+    '       b.first_name as assigned_by_first_name, b.last_name as assigned_by_last_name ' +
+    'FROM room_history h ' +
+    'LEFT JOIN users a ON a.id = h.removed_by ' +
+    'LEFT JOIN users b ON b.id = h.assigned_by ' +
+    'WHERE h.user_id = ? ORDER BY h.removed_at DESC'
+  ).all(userId);
 }
 
 const BILLING_SELECT =
@@ -1844,6 +1889,26 @@ db.prepare(`CREATE TABLE IF NOT EXISTS maintenance_requests (
   resolved_at TEXT
 )`).run();
 
+// ── Incident Reports ────────────────────────────────────────────────────────
+// Deliberately separate from maintenance_requests: incidents are safety /
+// conduct / security concerns (theft, harassment, curfew violations, etc.),
+// not repair requests, and are triaged differently by admins.
+db.prepare(`CREATE TABLE IF NOT EXISTS incident_reports (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category    TEXT NOT NULL DEFAULT 'other',    -- theft | safety_hazard | harassment | noise_complaint | property_damage | curfew_violation | other
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL,
+  location    TEXT,
+  severity    TEXT NOT NULL DEFAULT 'medium',   -- low | medium | high | critical
+  status      TEXT NOT NULL DEFAULT 'open',     -- open | investigating | resolved | closed
+  admin_note  TEXT,
+  image_url   TEXT DEFAULT '',
+  created_at  TEXT DEFAULT (datetime('now')),
+  updated_at  TEXT DEFAULT (datetime('now')),
+  resolved_at TEXT
+)`).run();
+
 // ── Utility Bills ─────────────────────────────────────────────────────────────
 db.prepare(`CREATE TABLE IF NOT EXISTS utility_bills (
   id          TEXT PRIMARY KEY,
@@ -1951,6 +2016,48 @@ function getMaintenanceStats() {
     open:        db.prepare("SELECT COUNT(*) as n FROM maintenance_requests WHERE status='open'").get().n,
     in_progress: db.prepare("SELECT COUNT(*) as n FROM maintenance_requests WHERE status='in_progress'").get().n,
     resolved:    db.prepare("SELECT COUNT(*) as n FROM maintenance_requests WHERE status='resolved' OR status='closed'").get().n,
+  };
+}
+
+function createIncidentReport({ userId, category, title, description, location, severity, imageUrl = '' }) {
+  const id = genId();
+  db.prepare(`INSERT INTO incident_reports (id, user_id, category, title, description, location, severity, image_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(id, userId, category || 'other', title, description, location || '', severity || 'medium', imageUrl || '');
+  return id;
+}
+
+function getIncidentReports({ status, userId, limit = 100, offset = 0 } = {}) {
+  let q = `SELECT ir.*, u.first_name, u.last_name, u.username, u.avatar,
+    COALESCE(ba.room_id, '') as room_id,
+    dr.room_number,
+    ba.bed_number
+    FROM incident_reports ir
+    JOIN users u ON u.id = ir.user_id
+    LEFT JOIN bed_assignments ba ON ba.user_id = ir.user_id
+    LEFT JOIN dorm_rooms dr ON dr.id = ba.room_id
+    WHERE 1=1`;
+  const params = [];
+  if (status && status !== 'all') { q += ' AND ir.status = ?'; params.push(status); }
+  if (userId) { q += ' AND ir.user_id = ?'; params.push(userId); }
+  q += " ORDER BY CASE ir.severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, ir.created_at DESC LIMIT ? OFFSET ?";
+  params.push(limit, offset);
+  return db.prepare(q).all(...params);
+}
+
+function updateIncidentReport(id, { status, adminNote }) {
+  db.prepare(`UPDATE incident_reports SET
+    status = COALESCE(?, status),
+    admin_note = COALESCE(?, admin_note),
+    resolved_at = CASE WHEN ? IN ('resolved','closed') THEN datetime('now') ELSE resolved_at END,
+    updated_at = datetime('now')
+    WHERE id = ?`).run(status || null, adminNote ?? null, status || null, id);
+}
+
+function getIncidentStats() {
+  return {
+    open:          db.prepare("SELECT COUNT(*) as n FROM incident_reports WHERE status='open'").get().n,
+    investigating: db.prepare("SELECT COUNT(*) as n FROM incident_reports WHERE status='investigating'").get().n,
+    resolved:      db.prepare("SELECT COUNT(*) as n FROM incident_reports WHERE status='resolved' OR status='closed'").get().n,
   };
 }
 
@@ -2190,7 +2297,7 @@ module.exports = {
   archiveRejectedRegistration, getRejectedRegistrations, deleteRejectedRegistration,
   getFullUserProfile,
   // Dormitory Management
-  getDormRooms, assignBed, unassignBed,
+  getDormRooms, assignBed, unassignBed, getRoomHistory,
   getDormBilling, generateMonthlyBills, generateBillForUser, markBillPaid, markBillUnpaid, waiveBill, setBillComment,
   // Reputation
   getReputationScore, getMyRepVote, setRepVote,
@@ -2198,6 +2305,8 @@ module.exports = {
   createUserReport, getUserReports, getAllUserReports, updateReportStatus, getReportCountByUser,
   // Maintenance Requests
   createMaintenanceRequest, getMaintenanceRequests, updateMaintenanceRequest, getMaintenanceStats,
+  // Incident Reports
+  createIncidentReport, getIncidentReports, updateIncidentReport, getIncidentStats,
   // Utility Bills
   upsertUtilityBill, getUtilityBills, getUtilityTrend,
   // GCash / billing receipts

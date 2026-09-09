@@ -18,13 +18,14 @@ const {
   findUserByEmail, findUserByUsername, findUserByPhone,
   createUser,
   createNotification,
-  getDormRooms, assignBed, unassignBed,
+  getDormRooms, assignBed, unassignBed, getRoomHistory,
   getDormBilling, generateMonthlyBills, generateBillForUser, markBillPaid, markBillUnpaid, waiveBill, setBillComment,
   clearBillReceipt,
   getSetting, setSetting,
   getAllUserReports, updateReportStatus, getReportCountByUser,
   getReputationScore,
   createMaintenanceRequest, getMaintenanceRequests, updateMaintenanceRequest, getMaintenanceStats,
+  getIncidentReports, updateIncidentReport, getIncidentStats,
   upsertUtilityBill, getUtilityBills, getUtilityTrend,
   nextAdmissionNo, semesterRollover,
   // DB Archives (full snapshots)
@@ -993,7 +994,7 @@ router.delete('/api/admin/dormitory/unassign/:userId', requireAdmin, async (req,
       'WHERE ba.user_id=?'
     ).get(req.params.userId);
 
-    const result = unassignBed(req.params.userId);
+    const result = unassignBed(req.params.userId, req.user?.id);
     if (!result.changes) return res.status(404).json({ error: 'No assignment found for this user' });
 
     logAdminAction(req.user?.id, 'unassign_bed', `User @${assignment?.username || req.params.userId} removed from Room ${assignment?.room_number} Bed ${assignment?.bed_number}`);
@@ -1027,6 +1028,14 @@ router.delete('/api/admin/dormitory/unassign/:userId', requireAdmin, async (req,
     log.error(`unassign_bed failed: ${err.message}`);
     send500(res, err, 'unassign_bed');
   }
+});
+
+// GET a resident's room history (past assignments, most recent first)
+router.get('/api/admin/dormitory/room-history/:userId', requireAdmin, (req, res) => {
+  try {
+    const history = getRoomHistory(req.params.userId);
+    res.json({ history });
+  } catch (err) { send500(res, err); }
 });
 
 // GET billing records
@@ -1420,6 +1429,44 @@ router.put('/api/admin/maintenance/requests/:id', requireAdmin, (req, res) => {
     updateMaintenanceRequest(req.params.id, { status, adminNote });
     logAdminAction(req.user?.id, 'maintenance_update', `Request ${req.params.id} → ${status}${adminNote ? ' | note: '+adminNote.slice(0,80) : ''}`);
     log.info(`[admin] Maintenance #${req.params.id} → "${status}" by @${req.user?.username}`);
+    res.json({ success: true });
+  } catch (err) { send500(res, err); }
+});
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  INCIDENT REPORTS (Admin)                                                    ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+/** GET /api/admin/incidents/stats */
+router.get('/api/admin/incidents/stats', requireAdmin, (req, res) => {
+  try {
+    res.json(getIncidentStats());
+  } catch (err) { send500(res, err); }
+});
+
+/** GET /api/admin/incidents/requests?status=&limit=&offset= */
+router.get('/api/admin/incidents/requests', requireAdmin, (req, res) => {
+  try {
+    const { status, limit, offset } = req.query;
+    const requests = getIncidentReports({
+      status: status || 'all',
+      limit: Math.min(parseInt(limit) || 100, 500),
+      offset: parseInt(offset) || 0,
+    });
+    res.json(requests);
+  } catch (err) { send500(res, err); }
+});
+
+/** PUT /api/admin/incidents/requests/:id */
+router.put('/api/admin/incidents/requests/:id', requireAdmin, (req, res) => {
+  try {
+    const { status, adminNote } = req.body;
+    if (!status) return res.status(400).json({ error: 'status is required' });
+    const VALID = ['open', 'investigating', 'resolved', 'closed'];
+    if (!VALID.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    updateIncidentReport(req.params.id, { status, adminNote });
+    logAdminAction(req.user?.id, 'incident_update', `Incident ${req.params.id} → ${status}${adminNote ? ' | note: ' + adminNote.slice(0, 80) : ''}`);
+    log.info(`[admin] Incident #${req.params.id} → "${status}" by @${req.user?.username}`);
     res.json({ success: true });
   } catch (err) { send500(res, err); }
 });

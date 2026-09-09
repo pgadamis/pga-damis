@@ -31,6 +31,7 @@ const {
   getReputationScore, getMyRepVote, setRepVote,
   createUserReport,
   createMaintenanceRequest, getMaintenanceRequests,
+  createIncidentReport, getIncidentReports,
 } = require('../utils/db');
 
 const log = require('../utils/logger');
@@ -500,6 +501,52 @@ router.get('/api/maintenance/requests/mine', requireAuth, (req, res) => {
   const { status } = req.query;
   const requests = getMaintenanceRequests({ userId: req.user.id, status: status || 'all' });
   res.json(requests);
+});
+
+// ── Incident Reports (user side) ──────────────────────────────────────────────
+// Kept as a separate resource from maintenance requests — incidents are safety/
+// conduct/security concerns, not repair requests, and admins triage them differently.
+
+// Submit a new incident report (optionally with a photo)
+router.post('/api/incidents', requireAuth, multerUpload.single('image'), async (req, res) => {
+  const { category, title, description, location, severity } = req.body;
+  if (!title?.trim() || !description?.trim()) return res.status(400).json({ error: 'Title and description are required.' });
+  try {
+    let imageUrl = '';
+    if (req.file) {
+      const buf = await resizeImage(req.file.buffer, { width: 1200, quality: 80 });
+      imageUrl = hasCloudinary
+        ? (await toCloudinary(buf, 'damis/incidents')).secure_url
+        : `data:${req.file.mimetype};base64,${buf.toString('base64')}`;
+    }
+    const id = createIncidentReport({
+      userId: req.user.id,
+      category: category || 'other',
+      title: title.trim(),
+      description: description.trim(),
+      location: location?.trim() || '',
+      severity: severity || 'medium',
+      imageUrl,
+    });
+    log.info(`Incident report submitted by @${req.user.username}: "${title.trim()}" [${category || 'other'}]${imageUrl ? ' +photo' : ''}`);
+
+    // Real-time nudge for admins — incidents (safety/security) warrant faster
+    // visibility than routine maintenance items, which don't push over sockets.
+    const io = req.app.get('io');
+    if (io) io.to('admins').emit('new-incident', { id, title: title.trim(), severity: severity || 'medium' });
+
+    res.json({ success: true, id });
+  } catch (e) {
+    log.error('createIncidentReport error:', e.message);
+    res.status(500).json({ error: 'Failed to submit report.' });
+  }
+});
+
+// Get own incident reports
+router.get('/api/incidents/mine', requireAuth, (req, res) => {
+  const { status } = req.query;
+  const reports = getIncidentReports({ userId: req.user.id, status: status || 'all' });
+  res.json(reports);
 });
 
 

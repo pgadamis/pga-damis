@@ -87,6 +87,7 @@
     <div class="nav-item" id="nav-users" onclick="showTab('users')"><i class="fa-solid fa-users w-4"></i>Residents</div>
     <div class="nav-item" id="nav-billing" onclick="showTab('billing')"><i class="fa-solid fa-peso-sign w-4"></i>Billing</div>
     <div class="nav-item" id="nav-maintenance" onclick="showTab('maintenance')"><i class="fa-solid fa-screwdriver-wrench w-4"></i>Maintenance <span id="maint-badge" class="ml-auto text-xs bg-orange-500 text-white rounded-full px-1.5 py-0.5 hidden">0</span></div>
+    <div class="nav-item" id="nav-incidents" onclick="showTab('incidents')"><i class="fa-solid fa-triangle-exclamation w-4"></i>Incident Reports <span id="incident-badge" class="ml-auto text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5 hidden">0</span></div>
     <div class="nav-item" id="nav-utility" onclick="showTab('utility')"><i class="fa-solid fa-bolt w-4"></i>Utility Bills</div>
 
     <div class="nav-section mt-2">Community</div>
@@ -258,10 +259,10 @@
         </div>
         <div id="dd-recent-apps" class="space-y-2"></div>
       </div>
-      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5">
+      <div onclick="showTab('maintenance')" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 cursor-pointer hover:border-orange-300 dark:hover:border-orange-800 hover:shadow-sm transition-all group">
         <div class="flex items-center justify-between mb-3">
           <h3 class="font-display font-semibold text-slate-800 dark:text-slate-100">Open Maintenance</h3>
-          <button onclick="showTab('maintenance')" class="text-xs text-brand-600 hover:underline font-medium">View all</button>
+          <span class="text-xs text-brand-600 font-medium flex items-center gap-1">View all<i class="fa-solid fa-chevron-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i></span>
         </div>
         <div id="dd-recent-maint" class="space-y-2"></div>
       </div>
@@ -677,6 +678,22 @@
         </div>
       </div>
     </div>
+
+    <!-- ROOM HISTORY MODAL -->
+    <div id="room-history-modal" class="hidden fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between mb-1 flex-shrink-0">
+          <div class="min-w-0">
+            <h3 class="font-display font-bold text-slate-800 dark:text-slate-100">Room History</h3>
+            <p id="room-history-subject" class="text-xs text-slate-400 truncate"></p>
+          </div>
+          <button onclick="closeRoomHistory()" class="text-slate-400 hover:text-slate-600 flex-shrink-0 ml-2"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="room-history-list" class="flex-1 overflow-y-auto mt-4 space-y-3 pr-1">
+          <div class="text-xs text-slate-400 text-center py-8"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading…</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ═══ BILLING ═══ -->
@@ -927,6 +944,56 @@
     </div>
   </div>
 
+  <!-- ═══ INCIDENT REPORTS ═══ -->
+  <div id="tab-incidents" class="tab-content">
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+      <div>
+        <h1 class="font-display font-bold text-2xl text-slate-900 dark:text-slate-100">Incident Reports</h1>
+        <p class="text-sm text-slate-400 mt-0.5">Safety, security &amp; conduct concerns reported by residents — kept separate from routine maintenance</p>
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <select id="incident-filter-status" onchange="loadIncidents()" class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm outline-none focus:border-brand-400">
+          <option value="all">All Status</option>
+          <option value="open">Open</option>
+          <option value="investigating">Investigating</option>
+          <option value="resolved">Resolved</option>
+          <option value="closed">Closed</option>
+        </select>
+        <button onclick="loadIncidents()" class="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors"><i class="fa-solid fa-rotate text-xs"></i>Refresh</button>
+      </div>
+    </div>
+    <!-- Stats -->
+    <div class="grid grid-cols-3 gap-4 mb-6">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 text-center">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Open</p>
+        <p id="incident-stat-open" class="text-3xl font-extrabold text-red-500">—</p>
+      </div>
+      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 text-center">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Investigating</p>
+        <p id="incident-stat-investigating" class="text-3xl font-extrabold text-amber-500">—</p>
+      </div>
+      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 text-center">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Resolved</p>
+        <p id="incident-stat-resolved" class="text-3xl font-extrabold text-green-600">—</p>
+      </div>
+    </div>
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead><tr class="border-b border-slate-100 dark:border-slate-800 text-xs text-slate-400 uppercase tracking-wider">
+          <th class="px-4 py-3 text-left">Resident</th>
+          <th class="px-4 py-3 text-left">Report</th>
+          <th class="px-4 py-3 text-left">Photo</th>
+          <th class="px-4 py-3 text-left">Category</th>
+          <th class="px-4 py-3 text-left">Severity</th>
+          <th class="px-4 py-3 text-left">Status</th>
+          <th class="px-4 py-3 text-left">Submitted</th>
+          <th class="px-4 py-3 text-left">Actions</th>
+        </tr></thead>
+        <tbody id="incident-tbody"><tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- ═══ UTILITY BILLS ═══ -->
   <div id="tab-utility" class="tab-content">
     <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
@@ -1078,6 +1145,36 @@
       <div class="flex gap-3 mt-6">
         <button onclick="closeMaintModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-semibold hover:bg-slate-50 transition-colors">Cancel</button>
         <button onclick="saveMaintUpdate()" class="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors">Update</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- INCIDENT UPDATE MODAL -->
+  <div id="incident-update-modal" class="hidden fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="font-display font-bold text-xl text-slate-900 dark:text-slate-100">Update Incident Report</h3>
+        <button onclick="closeIncidentModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <input type="hidden" id="incident-update-id"/>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Status</label>
+          <select id="incident-update-status" class="w-full bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-2.5 text-sm border border-transparent focus:border-brand-400 outline-none">
+            <option value="open">Open</option>
+            <option value="investigating">Investigating</option>
+            <option value="resolved">Resolved</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Admin Note</label>
+          <textarea id="incident-update-note" rows="3" class="w-full bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-2.5 text-sm border border-transparent focus:border-brand-400 outline-none resize-none" placeholder="e.g. Spoke with both parties, referred to guidance office"></textarea>
+        </div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button onclick="closeIncidentModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-semibold hover:bg-slate-50 transition-colors">Cancel</button>
+        <button onclick="saveIncidentUpdate()" class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors">Update</button>
       </div>
     </div>
   </div>
@@ -1549,6 +1646,7 @@
     else if(tab==='dormitory')loadDormRooms();
     else if(tab==='billing'){ initBillingMonth(); loadBilling(); loadGcashSettings(); }
     else if(tab==='maintenance'){ loadMaintenanceStats(); loadMaintenance(); }
+    else if(tab==='incidents'){ loadIncidentStats(); loadIncidents(); }
     else if(tab==='utility'){ initUtilityMonth(); loadUtility(); loadUtilityChart(); }
     else if(tab==='backup'){ /* static page, no load needed */ }
     else if(tab==='db-archives')loadDbArchives();
@@ -1730,17 +1828,30 @@
           const items = (md.requests||md||[]).slice(0,5);
           if(!items.length){ maintEl.innerHTML='<p class="text-xs text-slate-400 text-center py-3">No open requests</p>'; }
           else {
-            maintEl.innerHTML=items.map(m=>`
-              <div class="flex items-center gap-3 py-2 border-b border-slate-50 dark:border-slate-800 last:border-0">
-                <div class="w-8 h-8 rounded-xl bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center flex-shrink-0">
-                  <i class="fa-solid fa-screwdriver-wrench text-orange-500 text-xs"></i>
+            maintEl.innerHTML=items.map(m=>{
+              const meta = maintCategoryMeta(m.category);
+              const catLabel = m.category ? (m.category[0].toUpperCase()+m.category.slice(1)) : 'General';
+              // Prefer the specific spot the resident typed ("Bathroom"); fall back
+              // to their assigned room, then just the category — never a bare "Room —".
+              const subtitle = m.location
+                ? `${escHtml(m.location)} · ${escHtml(catLabel)}`
+                : m.room_number
+                  ? `Room ${escHtml(String(m.room_number))} · ${escHtml(catLabel)}`
+                  : escHtml(catLabel);
+              const stsCls = MAINT_STATUS_BADGE[m.status] || MAINT_STATUS_BADGE.open;
+              return `
+              <div onclick="event.stopPropagation();showTab('maintenance');openMaintUpdateModal({id:'${escJS(m.id)}',status:'${escJS(m.status||'open')}',adminNote:'${escJS(m.admin_note||'')}'})"
+                   class="flex items-center gap-3 py-2 px-2 -mx-2 rounded-xl border-b border-slate-50 dark:border-slate-800 last:border-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <div class="w-8 h-8 rounded-xl ${meta.bg} flex items-center justify-center flex-shrink-0">
+                  <i class="fa-solid ${meta.icon} ${meta.fg} text-xs"></i>
                 </div>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">${escHtml(m.title||'Untitled')}</p>
-                  <p class="text-xs text-slate-400 truncate">Room ${escHtml(m.roomNumber||'—')} · ${escHtml(m.category||'—')}</p>
+                  <p class="text-xs text-slate-400 truncate">${subtitle}</p>
                 </div>
-                <span class="text-xs font-semibold px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-600">${escHtml(m.status||'pending')}</span>
-              </div>`).join('');
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-lg ${stsCls} whitespace-nowrap">${escHtml((m.status||'open').replace('_',' '))}</span>
+              </div>`;
+            }).join('');
           }
         } catch(_){ maintEl.innerHTML='<p class="text-xs text-slate-400 text-center py-3">Unable to load</p>'; }
       }
@@ -1840,6 +1951,11 @@
       refreshUsers();
     });
     socket.on('account-rejected',()=>{ loadPendingAccounts(); updateRegBadge(-1); });
+    socket.on('new-incident',(data)=>{
+      loadIncidentStats();
+      toast(`⚠️ New incident report: ${data.title||'Untitled'}`, 'error');
+      if(document.getElementById('tab-incidents')?.classList.contains('active')) loadIncidents();
+    });
     try { await refreshAll(); loadDormDashboard(); console.log('%c ✓ Admin panel ready','color:#16a34a;font-weight:bold'); }
     catch(err) { console.error('[admin] refreshAll() failed:',err); }
     console.groupEnd();
@@ -2266,6 +2382,7 @@
   async function refreshAll(){
     loadAiStatus();
     loadMaintenanceStats(); // sync maint-badge on every refresh — not just the 60s poll
+    loadIncidentStats();    // sync incident-badge on every refresh — not just the 60s poll
     try{
       console.log('%c refreshAll: fetching…', 'color:#64748b;font-size:11px');
       const t0 = Date.now();
@@ -5027,7 +5144,12 @@
             </div>
           </div>
           ${occupied
-            ? `<button onclick="unassignBed(${r.roomNo},${b.bed})" class="text-[10px] font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 px-2 py-1 rounded-lg transition-colors flex-shrink-0">Remove</button>`
+            ? `<div class="flex items-center gap-1 flex-shrink-0">
+                 <button onclick="openRoomHistory('${escJS(b.student.userId)}','${escJS(b.student.name||'this resident')}')" title="View room history" class="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950/30 rounded-lg transition-colors">
+                   <i class="fa-solid fa-clock-rotate-left text-[11px]"></i>
+                 </button>
+                 <button onclick="unassignBed(${r.roomNo},${b.bed})" class="text-[10px] font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 px-2 py-1 rounded-lg transition-colors">Remove</button>
+               </div>`
             : `<button onclick="openAssignBed(${r.roomNo},${b.bed})" class="text-[10px] font-bold text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950/30 px-2 py-1 rounded-lg border border-brand-200 dark:border-brand-800 transition-colors flex-shrink-0">Assign</button>`
           }
         </div>`;
@@ -5130,14 +5252,19 @@
     if (occupiedCount > 0) {
       toast(`Cannot delete Room ${roomNo}: ${occupiedCount} resident(s) still assigned. Remove them first.`, 'error'); return;
     }
-    if (!confirm(`Delete Room ${roomNo}? This cannot be undone.`)) return;
-    try {
-      const r = await fetch(`/api/admin/dormitory/rooms/${roomId}`, { method: 'DELETE' });
-      const d = await r.json();
-      if (!r.ok || d.error) throw new Error(d.error || 'Failed');
-      toast(`Room ${roomNo} deleted.`, 'info');
-      await loadDormRooms();
-    } catch(e) { toast(e.message || 'Delete failed', 'error'); }
+    showConfirm(
+      `Delete Room ${roomNo}?`,
+      'This cannot be undone. The room and its bed layout will be permanently removed.',
+      async () => {
+        try {
+          const r = await fetch(`/api/admin/dormitory/rooms/${roomId}`, { method: 'DELETE' });
+          const d = await r.json();
+          if (!r.ok || d.error) throw new Error(d.error || 'Failed');
+          toast(`Room ${roomNo} deleted.`, 'info');
+          await loadDormRooms();
+        } catch(e) { toast(e.message || 'Delete failed', 'error'); }
+      }
+    );
   }
 
   // ── Add Room ──
@@ -5305,6 +5432,60 @@
     } catch(e) {
       toast(e.message || 'Unassign failed', 'error');
     }
+  }
+
+  // ── Room History (per-resident) ──────────────────────────────────────
+  async function openRoomHistory(userId, name) {
+    document.getElementById('room-history-subject').textContent = name || 'Resident';
+    document.getElementById('room-history-list').innerHTML = '<div class="text-xs text-slate-400 text-center py-8"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading…</div>';
+    document.getElementById('room-history-modal').classList.remove('hidden');
+    try {
+      const r = await fetch(`/api/admin/dormitory/room-history/${encodeURIComponent(userId)}`);
+      const d = await r.json();
+      if (!r.ok || d.error) throw new Error(d.error || 'Failed to load history');
+      renderRoomHistory(d.history || []);
+    } catch (e) {
+      document.getElementById('room-history-list').innerHTML = `<p class="text-xs text-red-400 text-center py-8">${escHtml(e.message || 'Failed to load history')}</p>`;
+    }
+  }
+  function closeRoomHistory() {
+    document.getElementById('room-history-modal').classList.add('hidden');
+  }
+  function renderRoomHistory(history) {
+    const el = document.getElementById('room-history-list');
+    if (!history.length) {
+      el.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">No previous room assignments on record. This resident has only ever had their current bed.</p>';
+      return;
+    }
+    el.innerHTML = history.map(h => {
+      const assignedByName = h.assigned_by_first_name ? escHtml(`${h.assigned_by_first_name} ${h.assigned_by_last_name||''}`.trim()) : 'system';
+      const removedByName  = h.removed_by_first_name  ? escHtml(`${h.removed_by_first_name} ${h.removed_by_last_name||''}`.trim())  : '—';
+      const durationDays = (() => {
+        try {
+          const a = new Date(h.assigned_at.replace(' ','T')+'Z');
+          const rmv = new Date(h.removed_at.replace(' ','T')+'Z');
+          const days = Math.max(1, Math.round((rmv - a) / 86400000));
+          return `${days} day${days===1?'':'s'}`;
+        } catch(_) { return ''; }
+      })();
+      return `<div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3.5">
+        <div class="flex items-start justify-between gap-2 mb-1.5">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+              <i class="fa-solid fa-bed text-slate-500 dark:text-slate-400 text-[11px]"></i>
+            </div>
+            <p class="text-sm font-bold text-slate-800 dark:text-slate-100">Room ${escHtml(String(h.room_number))} · Bed ${escHtml(String(h.bed_number))}</p>
+          </div>
+          <span class="text-[10px] font-semibold text-slate-400 whitespace-nowrap">${durationDays}</span>
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 pl-9">
+          <i class="fa-solid fa-arrow-right-to-bracket text-green-500 w-3"></i> ${reltime(h.assigned_at)} <span class="text-slate-300 dark:text-slate-600">·</span> by ${assignedByName}
+        </p>
+        <p class="text-xs text-slate-500 dark:text-slate-400 pl-9 mt-0.5">
+          <i class="fa-solid fa-arrow-right-from-bracket text-red-400 w-3"></i> ${reltime(h.removed_at)} <span class="text-slate-300 dark:text-slate-600">·</span> by ${removedByName}
+        </p>
+      </div>`;
+    }).join('');
   }
 
   // ══════════════════════════════════════════════════════
@@ -5649,6 +5830,19 @@
     resolved:    'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400',
     closed:      'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
   };
+  // Shared category → icon/color lookup, used by both the Maintenance table
+  // and the dashboard "Open Maintenance" widget so they stay visually consistent.
+  const MAINT_CATEGORY_META = {
+    electrical: { icon: 'fa-bolt',              bg: 'bg-amber-50 dark:bg-amber-950/30',     fg: 'text-amber-500'   },
+    plumbing:   { icon: 'fa-faucet',             bg: 'bg-blue-50 dark:bg-blue-950/30',       fg: 'text-blue-500'    },
+    door:       { icon: 'fa-door-open',          bg: 'bg-purple-50 dark:bg-purple-950/30',   fg: 'text-purple-500'  },
+    furniture:  { icon: 'fa-couch',              bg: 'bg-orange-50 dark:bg-orange-950/30',   fg: 'text-orange-500'  },
+    appliance:  { icon: 'fa-plug',               bg: 'bg-cyan-50 dark:bg-cyan-950/30',       fg: 'text-cyan-500'    },
+    cleaning:   { icon: 'fa-broom',              bg: 'bg-emerald-50 dark:bg-emerald-950/30', fg: 'text-emerald-500' },
+    window:     { icon: 'fa-window-maximize',    bg: 'bg-sky-50 dark:bg-sky-950/30',         fg: 'text-sky-500'     },
+    general:    { icon: 'fa-screwdriver-wrench', bg: 'bg-slate-100 dark:bg-slate-800',       fg: 'text-slate-500'   },
+  };
+  function maintCategoryMeta(category) { return MAINT_CATEGORY_META[category] || MAINT_CATEGORY_META.general; }
 
   async function loadMaintenanceStats() {
     try {
@@ -5690,11 +5884,10 @@
       tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">No maintenance requests found.</td></tr>';
       return;
     }
-    const CATEGORY_ICON = { plumbing:'fa-faucet', electrical:'fa-bolt', furniture:'fa-couch', door:'fa-door-open', window:'fa-window-maximize', appliance:'fa-plug', cleaning:'fa-broom', general:'fa-screwdriver-wrench' };
     tbody.innerHTML = requests.map(req => {
       const priCls = MAINT_PRIORITY_BADGE[req.priority] || MAINT_PRIORITY_BADGE.normal;
       const stsCls = MAINT_STATUS_BADGE[req.status]   || MAINT_STATUS_BADGE.open;
-      const icon   = CATEGORY_ICON[req.category] || 'fa-screwdriver-wrench';
+      const icon   = maintCategoryMeta(req.category).icon;
       const name   = escHtml(`${req.first_name} ${req.last_name}`);
       const room   = req.room_number ? `Room ${escHtml(String(req.room_number))}` : '—';
       const ago    = reltime(req.created_at);
@@ -5754,10 +5947,13 @@
     }).join('');
   }
 
-  function openMaintUpdateModal(btn) {
-    const id        = btn.dataset.maintId;
-    const status    = btn.dataset.maintStatus;
-    const adminNote = btn.dataset.maintNote || '';
+  // Accepts either a DOM button with data-maint-* attributes (table "Update" button)
+  // or a plain { id, status, adminNote } object (dashboard widget item click).
+  function openMaintUpdateModal(source) {
+    const fromDataset = !!source?.dataset;
+    const id        = fromDataset ? source.dataset.maintId     : source.id;
+    const status    = fromDataset ? source.dataset.maintStatus : source.status;
+    const adminNote = (fromDataset ? source.dataset.maintNote  : source.adminNote) || '';
     document.getElementById('maint-update-id').value     = id;
     document.getElementById('maint-update-status').value = status;
     document.getElementById('maint-update-note').value   = adminNote;
@@ -5786,6 +5982,175 @@
     } catch (e) {
       toast(e.message || 'Failed to update', 'error');
       console.error('saveMaintUpdate:', e);
+    }
+  }
+
+  // ╔══════════════════════════════════════════════════════════════╗
+  // ║  INCIDENT REPORTS — Admin JS                                  ║
+  // ╚══════════════════════════════════════════════════════════════╝
+  let _incidentReports = [];
+
+  const INCIDENT_SEVERITY_BADGE = {
+    critical: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400',
+    high:     'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400',
+    medium:   'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
+    low:      'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  };
+  const INCIDENT_STATUS_BADGE = {
+    open:          'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400',
+    investigating: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
+    resolved:      'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400',
+    closed:        'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+  };
+  const INCIDENT_CATEGORY_META = {
+    theft:             { icon: 'fa-user-secret',        bg: 'bg-red-50 dark:bg-red-950/30',     fg: 'text-red-500'    },
+    safety_hazard:     { icon: 'fa-triangle-exclamation',bg: 'bg-orange-50 dark:bg-orange-950/30',fg: 'text-orange-500' },
+    harassment:        { icon: 'fa-hand',                bg: 'bg-pink-50 dark:bg-pink-950/30',    fg: 'text-pink-500'   },
+    noise_complaint:   { icon: 'fa-volume-high',         bg: 'bg-purple-50 dark:bg-purple-950/30',fg: 'text-purple-500' },
+    property_damage:   { icon: 'fa-house-crack',         bg: 'bg-amber-50 dark:bg-amber-950/30',  fg: 'text-amber-500'  },
+    curfew_violation:  { icon: 'fa-clock',                bg: 'bg-indigo-50 dark:bg-indigo-950/30',fg: 'text-indigo-500' },
+    other:             { icon: 'fa-flag',                 bg: 'bg-slate-100 dark:bg-slate-800',    fg: 'text-slate-500'  },
+  };
+  function incidentCategoryMeta(category) { return INCIDENT_CATEGORY_META[category] || INCIDENT_CATEGORY_META.other; }
+  function incidentCategoryLabel(category) {
+    return (category || 'other').split('_').map(w => w[0].toUpperCase()+w.slice(1)).join(' ');
+  }
+
+  async function loadIncidentStats() {
+    try {
+      const r = await fetch('/api/admin/incidents/stats');
+      const d = await r.json();
+      const el = s => document.getElementById(s);
+      if (el('incident-stat-open'))          el('incident-stat-open').textContent          = d.open ?? 0;
+      if (el('incident-stat-investigating'))  el('incident-stat-investigating').textContent  = d.investigating ?? 0;
+      if (el('incident-stat-resolved'))       el('incident-stat-resolved').textContent       = d.resolved ?? 0;
+      const badge = document.getElementById('incident-badge');
+      if (badge) {
+        const open = d.open ?? 0;
+        badge.textContent = open;
+        badge.classList.toggle('hidden', open === 0);
+      }
+    } catch (e) { console.error('loadIncidentStats:', e); }
+  }
+
+  async function loadIncidents() {
+    const tbody = document.getElementById('incident-tbody');
+    if (!tbody) return;
+    const status = document.getElementById('incident-filter-status')?.value || 'all';
+    tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading…</td></tr>';
+    try {
+      const r = await fetch(`/api/admin/incidents/requests?status=${encodeURIComponent(status)}`);
+      _incidentReports = await r.json();
+      renderIncidents(_incidentReports);
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-red-400">Failed to load. Try again.</td></tr>';
+      console.error('loadIncidents:', e);
+    }
+  }
+
+  function renderIncidents(reports) {
+    const tbody = document.getElementById('incident-tbody');
+    if (!tbody) return;
+    if (!reports.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">No incident reports found.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = reports.map(rep => {
+      const sevCls = INCIDENT_SEVERITY_BADGE[rep.severity] || INCIDENT_SEVERITY_BADGE.medium;
+      const stsCls = INCIDENT_STATUS_BADGE[rep.status]     || INCIDENT_STATUS_BADGE.open;
+      const meta   = incidentCategoryMeta(rep.category);
+      const name   = escHtml(`${rep.first_name} ${rep.last_name}`);
+      const room   = rep.room_number ? `Room ${escHtml(String(rep.room_number))}` : '—';
+      const ago    = reltime(rep.created_at);
+      const imgCell = rep.image_url
+        ? `<button type="button"
+             onclick="openLightbox('${escHtml(rep.image_url)}','Incident Photo — ${name}')"
+             title="View photo" class="cursor-zoom-in group relative">
+             <img src="${escHtml(rep.image_url)}" alt="Incident photo"
+               class="h-12 w-16 rounded-lg object-cover border border-slate-200 group-hover:opacity-80 transition-opacity"/>
+             <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/25 rounded-lg">
+               <i class="fa-solid fa-magnifying-glass-plus text-white text-sm drop-shadow"></i>
+             </div>
+           </button>`
+        : `<span class="text-xs text-slate-300">—</span>`;
+      return `<tr class="border-b border-slate-50 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+        <td class="px-4 py-3">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+              ${rep.avatar ? `<img src="${escHtml(rep.avatar)}" class="w-8 h-8 rounded-xl object-cover"/>` : `<span class="text-xs font-bold text-slate-400">${escHtml(rep.first_name?.[0]||'?')}</span>`}
+            </div>
+            <div>
+              <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">${name}</p>
+              <p class="text-xs text-slate-400">${room}</p>
+            </div>
+          </div>
+        </td>
+        <td class="px-4 py-3 max-w-[200px]">
+          <p class="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">${escHtml(rep.title)}</p>
+          <p class="text-xs text-slate-400 line-clamp-2">${escHtml(rep.description)}</p>
+          ${rep.location ? `<p class="text-xs text-slate-400 mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>${escHtml(rep.location)}</p>` : ''}
+          ${rep.admin_note ? `<p class="text-xs text-brand-600 mt-0.5 italic"><i class="fa-solid fa-note-sticky mr-1"></i>${escHtml(rep.admin_note)}</p>` : ''}
+        </td>
+        <td class="px-4 py-3">${imgCell}</td>
+        <td class="px-4 py-3">
+          <span class="flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+            <i class="fa-solid ${meta.icon} w-3"></i>${escHtml(incidentCategoryLabel(rep.category))}
+          </span>
+        </td>
+        <td class="px-4 py-3">
+          <span class="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold ${sevCls}">${escHtml(rep.severity)}</span>
+        </td>
+        <td class="px-4 py-3">
+          <span class="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold ${stsCls}">${escHtml(rep.status.replace('_',' '))}</span>
+        </td>
+        <td class="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">${ago}</td>
+        <td class="px-4 py-3">
+          <button
+            data-incident-id="${escHtml(rep.id)}"
+            data-incident-status="${escHtml(rep.status)}"
+            data-incident-note="${escHtml(rep.admin_note||'')}"
+            onclick="openIncidentUpdateModal(this)"
+            class="text-xs font-semibold text-brand-600 hover:text-brand-700 px-2 py-1 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-950/30 transition-colors">
+            <i class="fa-solid fa-pen-to-square mr-1"></i>Update
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function openIncidentUpdateModal(source) {
+    const fromDataset = !!source?.dataset;
+    const id        = fromDataset ? source.dataset.incidentId     : source.id;
+    const status    = fromDataset ? source.dataset.incidentStatus : source.status;
+    const adminNote = (fromDataset ? source.dataset.incidentNote  : source.adminNote) || '';
+    document.getElementById('incident-update-id').value     = id;
+    document.getElementById('incident-update-status').value = status;
+    document.getElementById('incident-update-note').value   = adminNote;
+    document.getElementById('incident-update-modal').classList.remove('hidden');
+  }
+  function closeIncidentModal() {
+    document.getElementById('incident-update-modal').classList.add('hidden');
+  }
+  async function saveIncidentUpdate() {
+    const id     = document.getElementById('incident-update-id').value;
+    const status = document.getElementById('incident-update-status').value;
+    const note   = document.getElementById('incident-update-note').value.trim();
+    if (!id || !status) return;
+    try {
+      const r = await fetch(`/api/admin/incidents/requests/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, adminNote: note }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error || 'Update failed');
+      closeIncidentModal();
+      toast('Incident report updated', 'success');
+      loadIncidentStats();
+      loadIncidents();
+    } catch (e) {
+      toast(e.message || 'Failed to update', 'error');
+      console.error('saveIncidentUpdate:', e);
     }
   }
 
@@ -6443,6 +6808,7 @@
 
   // Periodically refresh maintenance badge count
   setInterval(loadMaintenanceStats, 60_000);
+  setInterval(loadIncidentStats, 60_000);
 
 
 </script>

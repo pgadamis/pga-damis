@@ -324,6 +324,27 @@
           <div class="h-14 bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse opacity-60"></div>
         </div>
       </div>
+
+      <!-- Divider with label -->
+      <div class="flex items-center gap-3 px-5 py-1">
+        <div class="flex-1 h-px bg-slate-100 dark:bg-slate-800"></div>
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Safety &amp; Incidents</span>
+        <div class="flex-1 h-px bg-slate-100 dark:bg-slate-800"></div>
+      </div>
+
+      <!-- Incident report section — visually distinct (red/alert) from Maintenance (orange) so
+           residents don't confuse a safety/conduct concern with a repair request. -->
+      <div class="px-5 pb-6">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Your incident reports</p>
+          <button onclick="openIncidentReportModal()" class="text-xs font-bold text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 shadow-sm">
+            <i class="fa-solid fa-triangle-exclamation text-[10px]"></i> Report Incident
+          </button>
+        </div>
+        <div id="dorm-panel-incident-list" class="space-y-2">
+          <div class="h-14 bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse"></div>
+        </div>
+      </div>
     </div>
 
     <!-- ── Footer hint ── -->
@@ -1670,6 +1691,105 @@
   </div>
 </div>
 
+<!-- ═══ INCIDENT REPORT MODAL ═══ -->
+<div id="incident-request-modal" class="hidden fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+  <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h3 class="font-display font-bold text-xl text-slate-900 dark:text-slate-100">Report an Incident</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Safety, security, or conduct concern — handled separately from maintenance issues.</p>
+      </div>
+      <button onclick="closeIncidentReportModal()" class="text-slate-400 hover:text-slate-600 w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="space-y-4">
+      <!-- Category -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Category</label>
+        <div class="grid grid-cols-3 gap-2" id="incident-category-grid">
+          <button type="button" onclick="selectIncidentCategory(this,'theft')" data-cat="theft" class="incident-cat-btn flex flex-col items-center gap-1 p-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-red-400 transition-colors text-slate-500 dark:text-slate-400 hover:text-red-500">
+            <i class="fa-solid fa-user-secret text-sm"></i><span class="text-[10px] font-semibold">Theft</span>
+          </button>
+          <button type="button" onclick="selectIncidentCategory(this,'safety_hazard')" data-cat="safety_hazard" class="incident-cat-btn flex flex-col items-center gap-1 p-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-red-400 transition-colors text-slate-500 dark:text-slate-400 hover:text-red-500">
+            <i class="fa-solid fa-triangle-exclamation text-sm"></i><span class="text-[10px] font-semibold">Safety Hazard</span>
+          </button>
+          <button type="button" onclick="selectIncidentCategory(this,'harassment')" data-cat="harassment" class="incident-cat-btn flex flex-col items-center gap-1 p-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-red-400 transition-colors text-slate-500 dark:text-slate-400 hover:text-red-500">
+            <i class="fa-solid fa-hand text-sm"></i><span class="text-[10px] font-semibold">Harassment</span>
+          </button>
+          <button type="button" onclick="selectIncidentCategory(this,'noise_complaint')" data-cat="noise_complaint" class="incident-cat-btn flex flex-col items-center gap-1 p-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-red-400 transition-colors text-slate-500 dark:text-slate-400 hover:text-red-500">
+            <i class="fa-solid fa-volume-high text-sm"></i><span class="text-[10px] font-semibold">Noise</span>
+          </button>
+          <button type="button" onclick="selectIncidentCategory(this,'property_damage')" data-cat="property_damage" class="incident-cat-btn flex flex-col items-center gap-1 p-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-red-400 transition-colors text-slate-500 dark:text-slate-400 hover:text-red-500">
+            <i class="fa-solid fa-house-crack text-sm"></i><span class="text-[10px] font-semibold">Property Damage</span>
+          </button>
+          <button type="button" onclick="selectIncidentCategory(this,'curfew_violation')" data-cat="curfew_violation" class="incident-cat-btn flex flex-col items-center gap-1 p-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-red-400 transition-colors text-slate-500 dark:text-slate-400 hover:text-red-500">
+            <i class="fa-solid fa-clock text-sm"></i><span class="text-[10px] font-semibold">Curfew</span>
+          </button>
+          <button type="button" onclick="selectIncidentCategory(this,'other')" data-cat="other" class="incident-cat-btn flex flex-col items-center gap-1 p-2 rounded-xl border-2 border-red-400 bg-red-50 dark:bg-red-950/30 transition-colors text-red-600 dark:text-red-400">
+            <i class="fa-solid fa-flag text-sm"></i><span class="text-[10px] font-semibold">Other</span>
+          </button>
+        </div>
+        <input type="hidden" id="incident-cat-value" value="other"/>
+      </div>
+      <!-- Title (quick summary) -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Brief Summary <span class="text-red-400">*</span></label>
+        <input type="text" id="incident-title" maxlength="120"
+          class="w-full bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-2.5 text-sm border border-transparent focus:border-red-400 outline-none"
+          placeholder="e.g. Unknown person in the hallway at night..."/>
+      </div>
+      <!-- Description -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Describe What Happened <span class="text-red-400">*</span></label>
+        <textarea id="incident-description" rows="3" maxlength="600"
+          class="w-full bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-2.5 text-sm border border-transparent focus:border-red-400 outline-none resize-none"
+          placeholder="Please describe what happened in detail, including anyone involved and when it occurred."></textarea>
+      </div>
+      <!-- Location -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Specific Location</label>
+        <input type="text" id="incident-location" maxlength="100"
+          class="w-full bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-2.5 text-sm border border-transparent focus:border-red-400 outline-none"
+          placeholder="e.g. Room 203 hallway, 2nd floor stairwell..."/>
+      </div>
+      <!-- Severity -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Severity</label>
+        <div class="grid grid-cols-4 gap-2">
+          <button type="button" onclick="selectIncidentSeverity(this,'low')" class="incident-sev-btn py-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-500 hover:border-green-400 hover:text-green-600 transition-colors">Low</button>
+          <button type="button" onclick="selectIncidentSeverity(this,'medium')" class="incident-sev-btn py-2 rounded-xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 text-xs font-semibold text-amber-600 dark:text-amber-400 transition-colors">Medium</button>
+          <button type="button" onclick="selectIncidentSeverity(this,'high')" class="incident-sev-btn py-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-500 hover:border-orange-500 hover:text-orange-600 transition-colors">High</button>
+          <button type="button" onclick="selectIncidentSeverity(this,'critical')" class="incident-sev-btn py-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-500 hover:border-red-500 hover:text-red-600 transition-colors">Critical</button>
+        </div>
+        <input type="hidden" id="incident-severity-value" value="medium"/>
+      </div>
+      <!-- Photo (optional) -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Photo <span class="text-slate-300 font-normal">(optional)</span></label>
+        <label id="incident-img-label" class="flex flex-col items-center justify-center gap-2 w-full h-24 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 cursor-pointer hover:border-red-400 transition-colors bg-slate-50 dark:bg-slate-800/60">
+          <i class="fa-solid fa-camera text-slate-400 text-lg"></i>
+          <span class="text-xs text-slate-400">Click to attach a photo</span>
+          <input type="file" id="incident-img-input" accept="image/*" class="hidden" onchange="onIncidentImgChange(this)"/>
+        </label>
+        <div id="incident-img-preview" class="hidden mt-2 relative w-fit">
+          <button type="button" id="incident-img-view-btn" onclick="openImgViewer(_incidentImgDataUrl)" title="Click to enlarge" class="block cursor-zoom-in group">
+            <img id="incident-img-thumb" src="" alt="preview" class="h-20 rounded-xl object-cover border border-slate-200 group-hover:opacity-80 transition-opacity"/>
+            <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-xl">
+              <i class="fa-solid fa-magnifying-glass-plus text-white text-sm drop-shadow"></i>
+            </div>
+          </button>
+          <button type="button" onclick="clearIncidentImg()" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center hover:bg-red-600 transition-colors z-10"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-6">
+      <button onclick="closeIncidentReportModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-semibold hover:bg-slate-50 transition-colors">Cancel</button>
+      <button onclick="submitIncidentReport()" id="incident-submit-btn" class="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2">
+        <i class="fa-solid fa-paper-plane"></i>Submit Report
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ─── Maintenance Request (User Side) ──────────────────────────────────────────
 let _myMaintRequests = [];
@@ -1839,6 +1959,170 @@ function renderMyMaintRequests() {
   });
 }
 
+// ─── Incident Report (User Side) ──────────────────────────────────────────────
+// Deliberately mirrors the maintenance flow above but posts to /api/incidents —
+// kept as a separate resource/UI so safety & conduct reports never get lost
+// among routine repair requests.
+let _myIncidentReports = [];
+let _incidentImgDataUrl = '';
+
+function openIncidentReportModal() {
+  document.getElementById('incident-title').value       = '';
+  document.getElementById('incident-description').value = '';
+  document.getElementById('incident-location').value    = '';
+  document.getElementById('incident-cat-value').value   = 'other';
+  document.getElementById('incident-severity-value').value = 'medium';
+  clearIncidentImg();
+  document.querySelectorAll('.incident-cat-btn').forEach(btn => {
+    btn.className = 'incident-cat-btn flex flex-col items-center gap-1 p-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-red-400 transition-colors text-slate-500 dark:text-slate-400 hover:text-red-500';
+  });
+  const otherBtn = document.querySelector('.incident-cat-btn[data-cat="other"]');
+  if (otherBtn) otherBtn.className = 'incident-cat-btn flex flex-col items-center gap-1 p-2 rounded-xl border-2 border-red-400 bg-red-50 dark:bg-red-950/30 transition-colors text-red-600 dark:text-red-400';
+  document.querySelectorAll('.incident-sev-btn').forEach(btn => {
+    btn.className = 'incident-sev-btn py-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-500 hover:border-red-400 hover:text-red-600 transition-colors';
+  });
+  const medBtn = document.querySelector('.incident-sev-btn:nth-child(2)');
+  if (medBtn) medBtn.className = 'incident-sev-btn py-2 rounded-xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 text-xs font-semibold text-amber-600 dark:text-amber-400 transition-colors';
+  document.getElementById('incident-request-modal').classList.remove('hidden');
+}
+function closeIncidentReportModal() {
+  document.getElementById('incident-request-modal').classList.add('hidden');
+}
+
+function selectIncidentCategory(btn, cat) {
+  document.querySelectorAll('.incident-cat-btn').forEach(b => {
+    b.className = 'incident-cat-btn flex flex-col items-center gap-1 p-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-red-400 transition-colors text-slate-500 dark:text-slate-400 hover:text-red-500';
+  });
+  btn.className = 'incident-cat-btn flex flex-col items-center gap-1 p-2 rounded-xl border-2 border-red-400 bg-red-50 dark:bg-red-950/30 transition-colors text-red-600 dark:text-red-400';
+  document.getElementById('incident-cat-value').value = cat;
+}
+
+function selectIncidentSeverity(btn, severity) {
+  const ACTIVE = 'incident-sev-btn py-2 rounded-xl border-2 border-red-400 bg-red-50 dark:bg-red-950/30 text-xs font-semibold text-red-600 dark:text-red-400 transition-colors';
+  const IDLE   = 'incident-sev-btn py-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-500 hover:border-red-400 hover:text-red-600 transition-colors';
+  document.querySelectorAll('.incident-sev-btn').forEach(b => b.className = IDLE);
+  btn.className = ACTIVE;
+  document.getElementById('incident-severity-value').value = severity;
+}
+
+function clearIncidentImg() {
+  const inp = document.getElementById('incident-img-input');
+  const pre = document.getElementById('incident-img-preview');
+  const lbl = document.getElementById('incident-img-label');
+  if (inp) inp.value = '';
+  if (pre) pre.classList.add('hidden');
+  if (lbl) lbl.classList.remove('hidden');
+  _incidentImgDataUrl = '';
+}
+
+function onIncidentImgChange(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = e => {
+    _incidentImgDataUrl = e.target.result;
+    const thumb = document.getElementById('incident-img-thumb');
+    const pre   = document.getElementById('incident-img-preview');
+    const lbl   = document.getElementById('incident-img-label');
+    if (thumb) thumb.src = _incidentImgDataUrl;
+    if (pre)   pre.classList.remove('hidden');
+    if (lbl)   lbl.classList.add('hidden');
+  };
+  reader.readAsDataURL(file);
+}
+
+async function submitIncidentReport() {
+  const btn         = document.getElementById('incident-submit-btn');
+  const title       = document.getElementById('incident-title').value.trim();
+  const description = document.getElementById('incident-description').value.trim();
+  const category    = document.getElementById('incident-cat-value').value;
+  const location    = document.getElementById('incident-location').value.trim();
+  const severity    = document.getElementById('incident-severity-value').value;
+  const imgInput    = document.getElementById('incident-img-input');
+
+  if (!title)       { showToast('Please enter a brief summary of the incident.', 'error'); return; }
+  if (!description) { showToast('Please describe what happened in more detail.', 'error'); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting…';
+  try {
+    const fd = new FormData();
+    fd.append('category',    category);
+    fd.append('title',       title);
+    fd.append('description', description);
+    fd.append('location',    location);
+    fd.append('severity',    severity);
+    if (imgInput?.files?.[0]) fd.append('image', imgInput.files[0]);
+
+    const r = await fetch('/api/incidents', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'Submission failed');
+    closeIncidentReportModal();
+    showToast('Your incident report has been submitted. Our team will follow up.', 'success');
+    loadMyIncidents();
+  } catch (e) {
+    showToast(e.message || 'Failed to submit. Please try again.', 'error');
+    console.error('submitIncidentReport:', e);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Report';
+  }
+}
+
+async function loadMyIncidents() {
+  try {
+    const r = await fetch('/api/incidents/mine?status=all');
+    if (!r.ok) return; // Not logged in or error — fail silently
+    _myIncidentReports = await r.json();
+    renderMyIncidents();
+  } catch (e) { console.error('loadMyIncidents:', e); }
+}
+
+function renderMyIncidents() {
+  const STATUS_COLOR = {
+    open:          'text-red-500',
+    investigating: 'text-amber-500',
+    resolved:      'text-green-600',
+    closed:        'text-slate-400',
+  };
+  const el = document.getElementById('dorm-panel-incident-list');
+  if (!el) return;
+  if (!_myIncidentReports.length) {
+    el.innerHTML = `<p class="text-xs text-slate-400 text-center py-2">No incident reports yet. <button onclick="openIncidentReportModal()" class="text-red-500 hover:underline font-medium">Report an incident</button></p>`;
+    return;
+  }
+  const recent = _myIncidentReports.slice(0, 3);
+  el.innerHTML = recent.map(rep => {
+    const stsCls = STATUS_COLOR[rep.status] || 'text-slate-400';
+    const ago    = typeof dayjs !== 'undefined'
+      ? dayjs(rep.created_at && !rep.created_at.includes('T') ? rep.created_at.replace(' ','T')+'Z' : rep.created_at).fromNow()
+      : '';
+    const stsIcon  = rep.status==='resolved'?'fa-circle-check text-green-500':rep.status==='investigating'?'fa-magnifying-glass text-amber-500':rep.status==='closed'?'fa-circle-xmark text-slate-400':'fa-triangle-exclamation text-red-400';
+    const stsBg    = rep.status==='resolved'?'bg-green-50 dark:bg-green-950/20':rep.status==='investigating'?'bg-amber-50 dark:bg-amber-950/20':rep.status==='closed'?'bg-slate-50 dark:bg-slate-800':'bg-red-50 dark:bg-red-950/20';
+    const imgThumb = rep.image_url
+      ? `<button type="button" onclick="openImgViewer('${escHtml(rep.image_url)}')"
+           title="View photo" class="flex-shrink-0 cursor-zoom-in group relative">
+           <img src="${escHtml(rep.image_url)}" alt="Incident photo"
+             class="h-10 w-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 group-hover:opacity-80 transition-opacity"/>
+           <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-lg">
+             <i class="fa-solid fa-magnifying-glass-plus text-white text-[10px] drop-shadow"></i>
+           </div>
+         </button>`
+      : '';
+    return `<div class="flex items-center gap-3 ${stsBg} rounded-xl px-3 py-2.5 mb-2">
+      <i class="fa-solid ${stsIcon} text-sm flex-shrink-0"></i>
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">${escHtml(rep.title)}</p>
+        <p class="text-[10px] ${stsCls} font-medium capitalize mt-0.5">${rep.status.replace(/_/g,' ')}${rep.admin_note?' · '+escHtml(rep.admin_note.slice(0,40)):''} · ${ago}</p>
+      </div>
+      ${imgThumb}
+    </div>`;
+  }).join('');
+  if (_myIncidentReports.length > 3) {
+    el.innerHTML += `<p class="text-[10px] text-slate-400 text-center pt-1">+${_myIncidentReports.length-3} more</p>`;
+  }
+}
+
 // Utility: toast for feed page (may use existing showToast or toast)
 function showToast(msg, type) {
   if (typeof toast === 'function') { toast(msg, type); return; }
@@ -1859,6 +2143,7 @@ function escHtml(str) {
 document.addEventListener('DOMContentLoaded', () => {
   // Delay slightly so auth completes first
   setTimeout(loadMyMaintRequests, 1500);
+  setTimeout(loadMyIncidents, 1500);
 });
 </script>
 
