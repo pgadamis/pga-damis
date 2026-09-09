@@ -251,7 +251,7 @@
     </div>
 
     <!-- ── Recent activity ── -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5">
         <div class="flex items-center justify-between mb-3">
           <h3 class="font-display font-semibold text-slate-800 dark:text-slate-100">Recent Applications</h3>
@@ -265,6 +265,13 @@
           <span class="text-xs text-brand-600 font-medium flex items-center gap-1">View all<i class="fa-solid fa-chevron-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i></span>
         </div>
         <div id="dd-recent-maint" class="space-y-2"></div>
+      </div>
+      <div onclick="showTab('incidents')" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 cursor-pointer hover:border-red-300 dark:hover:border-red-800 hover:shadow-sm transition-all group">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-display font-semibold text-slate-800 dark:text-slate-100">Incident Reports</h3>
+          <span class="text-xs text-brand-600 font-medium flex items-center gap-1">View all<i class="fa-solid fa-chevron-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i></span>
+        </div>
+        <div id="dd-recent-incidents" class="space-y-2"></div>
       </div>
     </div>
   </div>
@@ -1854,6 +1861,41 @@
             }).join('');
           }
         } catch(_){ maintEl.innerHTML='<p class="text-xs text-slate-400 text-center py-3">Unable to load</p>'; }
+      }
+
+      // Recent open incident reports — separate from maintenance, red/alert themed
+      const incidentEl = document.getElementById('dd-recent-incidents');
+      if(incidentEl){
+        try {
+          const ir = await fetch('/api/admin/incidents/requests?status=open&limit=5');
+          const idata = await ir.json();
+          const items = (idata.requests||idata||[]).slice(0,5);
+          if(!items.length){ incidentEl.innerHTML='<p class="text-xs text-slate-400 text-center py-3">No open incident reports</p>'; }
+          else {
+            incidentEl.innerHTML=items.map(rep=>{
+              const meta = incidentCategoryMeta(rep.category);
+              const catLabel = incidentCategoryLabel(rep.category);
+              const subtitle = rep.location
+                ? `${escHtml(rep.location)} · ${escHtml(catLabel)}`
+                : rep.room_number
+                  ? `Room ${escHtml(String(rep.room_number))} · ${escHtml(catLabel)}`
+                  : escHtml(catLabel);
+              const stsCls = INCIDENT_STATUS_BADGE[rep.status] || INCIDENT_STATUS_BADGE.open;
+              return `
+              <div onclick="event.stopPropagation();showTab('incidents');openIncidentUpdateModal({id:'${escJS(rep.id)}',status:'${escJS(rep.status||'open')}',adminNote:'${escJS(rep.admin_note||'')}'})"
+                   class="flex items-center gap-3 py-2 px-2 -mx-2 rounded-xl border-b border-slate-50 dark:border-slate-800 last:border-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <div class="w-8 h-8 rounded-xl ${meta.bg} flex items-center justify-center flex-shrink-0">
+                  <i class="fa-solid ${meta.icon} ${meta.fg} text-xs"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">${escHtml(rep.title||'Untitled')}</p>
+                  <p class="text-xs text-slate-400 truncate">${subtitle}</p>
+                </div>
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-lg ${stsCls} whitespace-nowrap">${escHtml((rep.status||'open').replace('_',' '))}</span>
+              </div>`;
+            }).join('');
+          }
+        } catch(_){ incidentEl.innerHTML='<p class="text-xs text-slate-400 text-center py-3">Unable to load</p>'; }
       }
 
       console.info('[DormDash] Loaded dormitory dashboard');
@@ -5419,19 +5461,24 @@
     const room = _dormRooms.find(r => r.roomNo === roomNo);
     const bed  = room?.beds?.find(b => b.bed === bedNo);
     const studentName = bed?.student?.name || 'this student';
-    if (!confirm(`Remove ${studentName} from Room ${roomNo}, Bed ${bedNo}?`)) return;
     if (!bed?.student?.userId) {
       toast('No assignment data found', 'error'); return;
     }
-    try {
-      const r = await fetch(`/api/admin/dormitory/unassign/${bed.student.userId}`, { method: 'DELETE' });
-      const d = await r.json();
-      if (!r.ok || d.error) throw new Error(d.error || 'Failed');
-      toast(`Bed ${bedNo} in Room ${roomNo} cleared.`, 'info');
-      await loadDormRooms(); // Reload from server
-    } catch(e) {
-      toast(e.message || 'Unassign failed', 'error');
-    }
+    showConfirm(
+      `Remove ${studentName}?`,
+      `They will be removed from Room ${roomNo}, Bed ${bedNo}. This bed will become available for a new assignment.`,
+      async () => {
+        try {
+          const r = await fetch(`/api/admin/dormitory/unassign/${bed.student.userId}`, { method: 'DELETE' });
+          const d = await r.json();
+          if (!r.ok || d.error) throw new Error(d.error || 'Failed');
+          toast(`Bed ${bedNo} in Room ${roomNo} cleared.`, 'info');
+          await loadDormRooms(); // Reload from server
+        } catch(e) {
+          toast(e.message || 'Unassign failed', 'error');
+        }
+      }
+    );
   }
 
   // ── Room History (per-resident) ──────────────────────────────────────
