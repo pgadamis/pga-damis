@@ -444,21 +444,34 @@
               <p class="text-sm font-extrabold text-slate-600 uppercase tracking-widest">School Information</p>
             </div>
 
-            <!-- School Name + School Address (readonly) -->
+            <!-- School Name + School Address (ASCOT default, switchable to manual entry) -->
             <div class="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">School Name</label>
-                <input id="reg-school" type="text" value="Aurora State College of Technology (ASCOT)" readonly
+                <div class="flex items-center justify-between mb-1.5">
+                  <label class="block text-xs font-semibold text-slate-600">School Name <span class="text-red-400">*</span></label>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-xs text-slate-500 font-semibold select-none">
+                    <input type="checkbox" id="school-name-manual-toggle" onchange="toggleSchoolManual('name')" class="w-3.5 h-3.5 accent-indigo-600"/>
+                    Not ASCOT
+                  </label>
+                </div>
+                <input id="reg-school" type="text" value="Aurora State College of Technology (ASCOT)" readonly required
                   class="form-input w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-100 dark:bg-slate-700 text-sm text-slate-500 cursor-default"/>
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">School Address</label>
-                <input id="reg-schooladdr" type="text" value="Zabali, Baler, Aurora" readonly
+                <div class="flex items-center justify-between mb-1.5">
+                  <label class="block text-xs font-semibold text-slate-600">School Address <span class="text-red-400">*</span></label>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-xs text-slate-500 font-semibold select-none">
+                    <input type="checkbox" id="school-addr-manual-toggle" onchange="toggleSchoolManual('addr')" class="w-3.5 h-3.5 accent-indigo-600"/>
+                    Not Zabali
+                  </label>
+                </div>
+                <input id="reg-schooladdr" type="text" value="Zabali, Baler, Aurora" readonly required
                   class="form-input w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-100 dark:bg-slate-700 text-sm text-slate-500 cursor-default"/>
               </div>
             </div>
+            <p class="text-xs text-slate-400 -mt-2 mb-3">Studying elsewhere? Check the box above the field to type your school's name/address manually.</p>
 
-            <!-- Year Level → Course → Specialization (cascading) -->
+            <!-- Year Level → Course → Specialization (cascading, each with a manual-entry fallback) -->
 
             <!-- Row 1: Year Level -->
             <div class="grid grid-cols-2 gap-3 mb-3">
@@ -475,10 +488,18 @@
                     <option value="3">3rd Year</option>
                     <option value="4">4th Year</option>
                     <option value="5">5th Year</option>
+                    <option value="__manual">Not listed &#8212; type manually</option>
                   </select>
                   <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs pointer-events-none"></i>
                 </div>
                 <p class="text-xs text-slate-400 mt-1">Select your year level first to filter available courses.</p>
+                <input id="reg-yearlevel-manual" type="text" list="yearlevel-suggestions" placeholder="Type your year level..."
+                  class="hidden form-input w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-100 mt-2"/>
+                <datalist id="yearlevel-suggestions">
+                  <option value="1st Year"></option><option value="2nd Year"></option>
+                  <option value="3rd Year"></option><option value="4th Year"></option>
+                  <option value="5th Year"></option><option value="Irregular"></option>
+                </datalist>
               </div>
               <div>
                 <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
@@ -491,10 +512,13 @@
                   </select>
                   <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs pointer-events-none"></i>
                 </div>
+                <input id="reg-course-manual" type="text" list="course-suggestions" placeholder="Type your program / course..."
+                  class="hidden form-input w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-100 mt-2"/>
+                <datalist id="course-suggestions"></datalist>
               </div>
             </div>
 
-            <!-- Row 2: Specialization / Major (shown only when course has one) -->
+            <!-- Row 2: Specialization / Major (shown only when course has one, or manual course chosen) -->
             <div id="specialization-row" class="hidden mb-1">
               <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
                 <i class="fa-solid fa-diagram-project text-purple-400 mr-1"></i>Major / Specialization <span class="text-red-400">*</span>
@@ -506,6 +530,9 @@
                 </select>
                 <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs pointer-events-none"></i>
               </div>
+              <input id="reg-specialization-manual" type="text" list="specialization-suggestions" placeholder="Type your major / specialization..."
+                class="hidden form-input w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-100 mt-2"/>
+              <datalist id="specialization-suggestions"></datalist>
             </div>
 
           </div>
@@ -546,7 +573,15 @@
                     <option value="">&#8212; None &#8212;</option><option>Jr.</option><option>Sr.</option><option>II</option><option>III</option><option>IV</option></select>
                 </div>
               </div>
-              <!-- Father contact + employer -->
+              <!-- Father deceased toggle -->
+              <div class="flex items-center justify-between mb-2 px-0.5">
+                <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-600 select-none">
+                  <input type="checkbox" id="father-deceased" onchange="toggleParentDeceased('father')" class="w-3.5 h-3.5 accent-slate-600"/>
+                  <i class="fa-solid fa-dove text-slate-400"></i> Father is deceased
+                </label>
+              </div>
+              <!-- Father contact + employer (hidden when deceased) -->
+              <div id="father-alive-fields">
               <div class="grid grid-cols-2 gap-2 mb-2">
                 <div>
                   <label class="block text-xs font-semibold text-slate-600 mb-1">Contact Number <span class="text-red-400">*</span></label>
@@ -592,6 +627,7 @@
                   <input id="father-addr-hidden" type="hidden" value=""/>
                 </div>
               </div>
+              </div>
             </div>
 
             <!-- Mother -->
@@ -620,7 +656,15 @@
                     <option value="">&#8212; None &#8212;</option><option>Jr.</option><option>Sr.</option><option>II</option><option>III</option><option>IV</option></select>
                 </div>
               </div>
-              <!-- Mother contact + employer -->
+              <!-- Mother deceased toggle -->
+              <div class="flex items-center justify-between mb-2 px-0.5">
+                <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-600 select-none">
+                  <input type="checkbox" id="mother-deceased" onchange="toggleParentDeceased('mother')" class="w-3.5 h-3.5 accent-slate-600"/>
+                  <i class="fa-solid fa-dove text-slate-400"></i> Mother is deceased
+                </label>
+              </div>
+              <!-- Mother contact + employer (hidden when deceased) -->
+              <div id="mother-alive-fields">
               <div class="grid grid-cols-2 gap-2 mb-2">
                 <div>
                   <label class="block text-xs font-semibold text-slate-600 mb-1">Contact Number <span class="text-red-400">*</span></label>
@@ -664,6 +708,87 @@
                     <option value="">&#8212; Barangay &#8212;</option></select>
                     <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs pointer-events-none"></i></div>
                   <input id="mother-addr-hidden" type="hidden" value=""/>
+                </div>
+              </div>
+              </div>
+            </div>
+
+            <!-- Guardian's Information — shown only when BOTH parents are marked deceased -->
+            <div id="guardian-section" class="hidden bg-amber-50/50 dark:bg-amber-950/20 border-2 border-amber-200 dark:border-amber-900/40 rounded-2xl p-4 mb-4">
+              <p class="text-xs font-extrabold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                <i class="fa-solid fa-shield-heart text-amber-500"></i> Guardian's Information</p>
+              <p class="text-xs text-amber-600/70 dark:text-amber-400/70 mb-3">Both parents are marked deceased — please provide your current guardian's details.</p>
+              <div class="grid grid-cols-4 gap-2 mb-2">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">First Name <span class="text-red-400">*</span></label>
+                  <input id="guardian-fname" type="text" placeholder="Juan" oninput="blockInvalidNameChars(this)"
+                    class="form-input w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 placeholder:text-slate-300"/>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">Middle Name <span class="text-slate-300 font-normal">(opt.)</span></label>
+                  <input id="guardian-mname" type="text" placeholder="Santos" oninput="blockInvalidNameChars(this)"
+                    class="form-input w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 placeholder:text-slate-300"/>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">Last Name <span class="text-red-400">*</span></label>
+                  <input id="guardian-lname" type="text" placeholder="Dela Cruz" oninput="blockInvalidNameChars(this)"
+                    class="form-input w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 placeholder:text-slate-300"/>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">Suffix <span class="text-slate-300 font-normal">(opt.)</span></label>
+                  <select id="guardian-suffix" class="form-input w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 appearance-none">
+                    <option value="">&#8212; None &#8212;</option><option>Jr.</option><option>Sr.</option><option>II</option><option>III</option><option>IV</option></select>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-2 mb-2">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">Relationship to Resident <span class="text-red-400">*</span></label>
+                  <input id="guardian-relationship" type="text" placeholder="e.g. Grandmother, Aunt, Elder Sibling"
+                    class="form-input w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 placeholder:text-slate-300"/>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">Contact Number <span class="text-red-400">*</span></label>
+                  <div class="flex rounded-xl overflow-hidden border border-slate-200 bg-white focus-within:border-amber-400 transition-all">
+                    <span class="flex items-center px-2.5 bg-slate-100 border-r border-slate-200 text-xs font-semibold text-slate-600 select-none whitespace-nowrap">&#127477;&#127469; +63</span>
+                    <input id="guardian-phone" type="tel" placeholder="9171234567" maxlength="10" oninput="countParentPhone('guardian-phone','guardian-phone-count','guardian-phone-err')"
+                      class="flex-1 px-2.5 py-2 bg-transparent text-sm text-slate-700 placeholder:text-slate-300 outline-none"/>
+                  </div>
+                  <div class="flex justify-between mt-1"><p id="guardian-phone-err" class="text-xs text-red-400 hidden">Must start with 9</p><span id="guardian-phone-count" class="text-xs text-slate-400 ml-auto">0/10</span></div>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-2 mb-2">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">Employer / Company <span class="text-slate-300 font-normal">(opt.)</span></label>
+                  <input id="guardian-employer" type="text" placeholder="e.g. PGA, ASCOT, Private"
+                    class="form-input w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 placeholder:text-slate-300"/>
+                </div>
+              </div>
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <label class="block text-xs font-semibold text-slate-600">Address <span class="text-red-400">*</span></label>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-xs text-slate-500 font-semibold select-none">
+                    <input type="checkbox" id="guardian-same-as-perm" onchange="toggleParentSameAsPerm('guardian')" class="w-3.5 h-3.5 accent-amber-600"/>
+                    Same as Permanent
+                  </label>
+                </div>
+                <div class="space-y-1.5" id="guardian-addr-fields">
+                  <div class="relative"><select id="guardian-region" onchange="loadAddrCascade('guardian','province')"
+                    class="form-input w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 appearance-none pr-8 transition-colors">
+                    <option value="">&#8212; Region &#8212;</option></select>
+                    <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs pointer-events-none"></i></div>
+                  <div class="relative"><select id="guardian-province" onchange="loadAddrCascade('guardian','city')" disabled
+                    class="form-input w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-600 appearance-none pr-8 disabled:opacity-50 transition-colors">
+                    <option value="">&#8212; Province &#8212;</option></select>
+                    <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs pointer-events-none"></i></div>
+                  <div class="relative"><select id="guardian-city" onchange="loadAddrCascade('guardian','brgy')" disabled
+                    class="form-input w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-600 appearance-none pr-8 disabled:opacity-50 transition-colors">
+                    <option value="">&#8212; City/Municipality &#8212;</option></select>
+                    <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs pointer-events-none"></i></div>
+                  <div class="relative"><select id="guardian-brgy" onchange="buildAddrString('guardian')" disabled
+                    class="form-input w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-600 appearance-none pr-8 disabled:opacity-50 transition-colors">
+                    <option value="">&#8212; Barangay &#8212;</option></select>
+                    <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs pointer-events-none"></i></div>
+                  <input id="guardian-addr-hidden" type="hidden" value=""/>
                 </div>
               </div>
             </div>
@@ -1505,6 +1630,71 @@ function toggleParentSameAsPerm(prefix) {
     fields.style.opacity = '';
     fields.style.pointerEvents = '';
   }
+}
+
+// ── Deceased parent toggle ────────────────────────────────────────
+// Hides that parent's contact/employer/address fields (they're not
+// collectible from a deceased parent) and drops them from validation.
+// If BOTH parents end up marked deceased, reveals the Guardian section.
+function toggleParentDeceased(prefix) {
+  const chk    = document.getElementById(prefix + '-deceased');
+  const fields = document.getElementById(prefix + '-alive-fields');
+  if (chk.checked) {
+    fields.classList.add('hidden');
+    // Clear values so a previously-filled phone/employer/address never
+    // gets silently submitted alongside a "deceased" flag.
+    ['-phone', '-employer', '-addr-hidden', '-region', '-province', '-city', '-brgy'].forEach(suffix => {
+      const el = document.getElementById(prefix + suffix);
+      if (el) el.tagName === 'SELECT' ? (el.selectedIndex = 0) : (el.value = '');
+    });
+  } else {
+    fields.classList.remove('hidden');
+  }
+  console.log('[DAMIS] ' + prefix + ' deceased = ' + chk.checked);
+  updateGuardianSectionVisibility();
+}
+
+function updateGuardianSectionVisibility() {
+  const fatherDeceased = document.getElementById('father-deceased')?.checked;
+  const motherDeceased = document.getElementById('mother-deceased')?.checked;
+  const section = document.getElementById('guardian-section');
+  if (!section) return;
+  const bothDeceased = !!(fatherDeceased && motherDeceased);
+  section.classList.toggle('hidden', !bothDeceased);
+  if (!bothDeceased) {
+    // Clear guardian fields when the section is hidden so stale data from a
+    // toggled-back-and-forth checkbox never gets submitted.
+    ['guardian-fname','guardian-mname','guardian-lname','guardian-relationship',
+     'guardian-phone','guardian-employer','guardian-addr-hidden'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    document.getElementById('guardian-suffix') && (document.getElementById('guardian-suffix').selectedIndex = 0);
+  }
+  console.log('[DAMIS] Guardian section ' + (bothDeceased ? 'shown' : 'hidden'));
+}
+
+// ── School Name / Address manual-entry toggle ─────────────────────
+// Keeps the ASCOT default pre-filled; checking the box swaps the field to a
+// free-text input (still required) for residents attending a different school.
+function toggleSchoolManual(which) {
+  const id       = which === 'name' ? 'reg-school' : 'reg-schooladdr';
+  const toggleId = which === 'name' ? 'school-name-manual-toggle' : 'school-addr-manual-toggle';
+  const el       = document.getElementById(id);
+  const manual   = document.getElementById(toggleId).checked;
+  if (manual) {
+    el.readOnly = false;
+    el.value = '';
+    el.classList.remove('bg-slate-100','dark:bg-slate-700','text-slate-500','cursor-default');
+    el.classList.add('bg-white','dark:bg-slate-800','text-slate-700');
+    el.placeholder = which === 'name' ? 'Enter your school name' : 'Enter your school address';
+    el.focus();
+  } else {
+    el.readOnly = true;
+    el.value = which === 'name' ? 'Aurora State College of Technology (ASCOT)' : 'Zabali, Baler, Aurora';
+    el.classList.add('bg-slate-100','dark:bg-slate-700','text-slate-500','cursor-default');
+    el.classList.remove('bg-white','dark:bg-slate-800','text-slate-700');
+  }
+  console.log('[DAMIS] School ' + which + ' manual entry = ' + manual);
 }
 
 </script>

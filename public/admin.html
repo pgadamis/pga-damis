@@ -2743,11 +2743,13 @@
     }
 
     // ── Parse family objects ────────────────────────────────
-    var fObj = {}, mObj = {};
+    var fObj = {}, mObj = {}, gObj = {};
     try { fObj = JSON.parse(a.father_info || '{}'); } catch(e){}
     try { mObj = JSON.parse(a.mother_info || '{}'); } catch(e){}
+    try { gObj = JSON.parse(a.guardian_info || '{}'); } catch(e){}
     var fName = [fObj.firstName, fObj.middleName, fObj.lastName, fObj.suffix].filter(Boolean).join(' ');
     var mName = [mObj.firstName, mObj.middleName, mObj.lastName, mObj.suffix].filter(Boolean).join(' ');
+    var gName = [gObj.firstName, gObj.middleName, gObj.lastName, gObj.suffix].filter(Boolean).join(' ');
 
     function parentCard(heading, obj, fullname) {
       if (!fullname) return '';
@@ -2759,6 +2761,42 @@
       // Name row (full width)
       html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name</p>'
         + '<p class="text-lg font-bold text-slate-800 dark:text-slate-100">' + escHtml(fullname) + '</p></div>';
+      if (obj.deceased) {
+        // Deceased — contact/employer/address were intentionally skipped at registration.
+        html += '<div class="col-span-2"><span class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">'
+          + '<i class="fa-solid fa-dove"></i>Deceased</span></div>';
+      } else {
+        if (obj.address) {
+          html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Address</p>'
+            + '<p class="text-base font-semibold text-slate-700 dark:text-slate-200 leading-snug">' + escHtml(obj.address) + '</p></div>';
+        }
+        if (obj.phone) {
+          html += '<div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Contact Number</p>'
+            + '<p class="text-base font-semibold text-slate-700 dark:text-slate-200">' + escHtml(obj.phone) + '</p></div>';
+        }
+        if (obj.employer) {
+          html += '<div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Employer</p>'
+            + '<p class="text-base font-semibold text-slate-700 dark:text-slate-200">' + escHtml(obj.employer) + '</p></div>';
+        }
+      }
+      html += '</div></div>';
+      return html;
+    }
+
+    // Guardian card — only relevant when both parents are deceased; includes
+    // a Relationship field that father/mother cards don't have.
+    function guardianCard(obj, fullname) {
+      if (!fullname) return '';
+      var html = '<div class="bg-white dark:bg-slate-900 rounded-2xl border-2 border-amber-200 dark:border-amber-900/50 p-4 shadow-sm">'
+        + '<p class="text-xs font-extrabold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-3 pb-2 border-b border-amber-100 dark:border-amber-900/40 flex items-center gap-1.5">'
+        + '<i class="fa-solid fa-shield-heart"></i>Guardian</p>'
+        + '<div class="grid grid-cols-2 gap-3">';
+      html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name</p>'
+        + '<p class="text-lg font-bold text-slate-800 dark:text-slate-100">' + escHtml(fullname) + '</p></div>';
+      if (obj.relationship) {
+        html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Relationship to Resident</p>'
+          + '<p class="text-base font-semibold text-slate-700 dark:text-slate-200">' + escHtml(obj.relationship) + '</p></div>';
+      }
       if (obj.address) {
         html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Address</p>'
           + '<p class="text-base font-semibold text-slate-700 dark:text-slate-200 leading-snug">' + escHtml(obj.address) + '</p></div>';
@@ -2781,6 +2819,7 @@
         + parentCard('Father', fObj, fName)
         + parentCard('Mother', mObj, mName)
         + '</div>'
+        + (gName ? '<div class="grid grid-cols-1 mb-3">' + guardianCard(gObj, gName) + '</div>' : '')
         + (a.monthly_income
           ? '<div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">'
             + '<div class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0">'
@@ -4363,11 +4402,13 @@
         + '</div></div>';
     }
 
-    var fObj = {}, mObj = {};
+    var fObj = {}, mObj = {}, gObj = {};
     try { fObj = JSON.parse(a.father_info || '{}'); } catch(e){}
     try { mObj = JSON.parse(a.mother_info || '{}'); } catch(e){}
+    try { gObj = JSON.parse(a.guardian_info || '{}'); } catch(e){}
     var fName = [fObj.firstName, fObj.middleName, fObj.lastName, fObj.suffix].filter(Boolean).join(' ');
     var mName = [mObj.firstName, mObj.middleName, mObj.lastName, mObj.suffix].filter(Boolean).join(' ');
+    var gName = [gObj.firstName, gObj.middleName, gObj.lastName, gObj.suffix].filter(Boolean).join(' ');
 
     function parentCard(heading, obj, fullname) {
       if (!fullname) return '';
@@ -4376,6 +4417,24 @@
         + '<div class="grid grid-cols-2 gap-3">';
       html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name</p>'
         + '<p class="text-lg font-bold text-slate-800 dark:text-slate-100">' + escHtml(fullname) + '</p></div>';
+      if (obj.deceased) {
+        html += '<div class="col-span-2"><span class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg"><i class="fa-solid fa-dove"></i>Deceased</span></div>';
+      } else {
+        if (obj.address) { html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Address</p><p class="text-base font-semibold text-slate-700 dark:text-slate-200 leading-snug">' + escHtml(obj.address) + '</p></div>'; }
+        if (obj.phone)   { html += '<div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Contact Number</p><p class="text-base font-semibold text-slate-700 dark:text-slate-200">' + escHtml(obj.phone) + '</p></div>'; }
+        if (obj.employer){ html += '<div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Employer</p><p class="text-base font-semibold text-slate-700 dark:text-slate-200">' + escHtml(obj.employer) + '</p></div>'; }
+      }
+      html += '</div></div>';
+      return html;
+    }
+
+    function guardianCard(obj, fullname) {
+      if (!fullname) return '';
+      var html = '<div class="bg-white dark:bg-slate-900 rounded-2xl border-2 border-amber-200 dark:border-amber-900/50 p-4 shadow-sm">'
+        + '<p class="text-xs font-extrabold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-3 pb-2 border-b border-amber-100 dark:border-amber-900/40 flex items-center gap-1.5"><i class="fa-solid fa-shield-heart"></i>Guardian</p>'
+        + '<div class="grid grid-cols-2 gap-3">';
+      html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name</p><p class="text-lg font-bold text-slate-800 dark:text-slate-100">' + escHtml(fullname) + '</p></div>';
+      if (obj.relationship) { html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Relationship to Resident</p><p class="text-base font-semibold text-slate-700 dark:text-slate-200">' + escHtml(obj.relationship) + '</p></div>'; }
       if (obj.address) { html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Address</p><p class="text-base font-semibold text-slate-700 dark:text-slate-200 leading-snug">' + escHtml(obj.address) + '</p></div>'; }
       if (obj.phone)   { html += '<div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Contact Number</p><p class="text-base font-semibold text-slate-700 dark:text-slate-200">' + escHtml(obj.phone) + '</p></div>'; }
       if (obj.employer){ html += '<div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Employer</p><p class="text-base font-semibold text-slate-700 dark:text-slate-200">' + escHtml(obj.employer) + '</p></div>'; }
@@ -4389,6 +4448,7 @@
         + parentCard('Father', fObj, fName)
         + parentCard('Mother', mObj, mName)
         + '</div>'
+        + (gName ? '<div class="grid grid-cols-1 mb-3">' + guardianCard(gObj, gName) + '</div>' : '')
         + (a.monthly_income
           ? '<div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">'
             + '<div class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0">'
@@ -4649,11 +4709,13 @@
         +'</div></div>';
     }
 
-    var fObj={}, mObj={};
+    var fObj={}, mObj={}, gObj={};
     try { fObj = JSON.parse(u.fatherInfo||'{}'); } catch(e){}
     try { mObj = JSON.parse(u.motherInfo||'{}'); } catch(e){}
+    try { gObj = JSON.parse(u.guardianInfo||'{}'); } catch(e){}
     var fName = [fObj.firstName,fObj.middleName,fObj.lastName,fObj.suffix].filter(Boolean).join(' ');
     var mName = [mObj.firstName,mObj.middleName,mObj.lastName,mObj.suffix].filter(Boolean).join(' ');
+    var gName = [gObj.firstName,gObj.middleName,gObj.lastName,gObj.suffix].filter(Boolean).join(' ');
 
     function parentCard(heading, obj, fullname){
       if(!fullname) return '';
@@ -4662,6 +4724,24 @@
         +'<div class="grid grid-cols-2 gap-3">';
       html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name</p>'
         +'<p class="text-lg font-bold text-slate-800 dark:text-slate-100">'+escHtml(fullname)+'</p></div>';
+      if (obj.deceased) {
+        html += '<div class="col-span-2"><span class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg"><i class="fa-solid fa-dove"></i>Deceased</span></div>';
+      } else {
+        if(obj.address) html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Address</p><p class="text-base font-semibold text-slate-700 dark:text-slate-200 leading-snug">'+escHtml(obj.address)+'</p></div>';
+        if(obj.phone)   html += '<div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Contact Number</p><p class="text-base font-semibold text-slate-700 dark:text-slate-200">'+escHtml(obj.phone)+'</p></div>';
+        if(obj.employer)html += '<div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Employer</p><p class="text-base font-semibold text-slate-700 dark:text-slate-200">'+escHtml(obj.employer)+'</p></div>';
+      }
+      html += '</div></div>';
+      return html;
+    }
+
+    function guardianCard(obj, fullname){
+      if(!fullname) return '';
+      var html = '<div class="bg-white dark:bg-slate-900 rounded-2xl border-2 border-amber-200 dark:border-amber-900/50 p-4 shadow-sm">'
+        +'<p class="text-xs font-extrabold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-3 pb-2 border-b border-amber-100 dark:border-amber-900/40 flex items-center gap-1.5"><i class="fa-solid fa-shield-heart"></i>Guardian</p>'
+        +'<div class="grid grid-cols-2 gap-3">';
+      html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name</p><p class="text-lg font-bold text-slate-800 dark:text-slate-100">'+escHtml(fullname)+'</p></div>';
+      if(obj.relationship) html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Relationship to Resident</p><p class="text-base font-semibold text-slate-700 dark:text-slate-200">'+escHtml(obj.relationship)+'</p></div>';
       if(obj.address) html += '<div class="col-span-2"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Address</p><p class="text-base font-semibold text-slate-700 dark:text-slate-200 leading-snug">'+escHtml(obj.address)+'</p></div>';
       if(obj.phone)   html += '<div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Contact Number</p><p class="text-base font-semibold text-slate-700 dark:text-slate-200">'+escHtml(obj.phone)+'</p></div>';
       if(obj.employer)html += '<div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Employer</p><p class="text-base font-semibold text-slate-700 dark:text-slate-200">'+escHtml(obj.employer)+'</p></div>';
@@ -4678,6 +4758,7 @@
         +parentCard('Father',fObj,fName)
         +parentCard('Mother',mObj,mName)
         +'</div>'
+        +(gName ? '<div class="grid grid-cols-1 mb-3">'+guardianCard(gObj,gName)+'</div>' : '')
         +(u.monthlyIncome
           ?'<div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">'
            +'<div class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0">'

@@ -599,12 +599,26 @@ async function validateStep(step) {
       if ($('pres-addr-hidden')) $('pres-addr-hidden').value = $('perm-addr-hidden') ? $('perm-addr-hidden').value : '';
     }
 
+    // School Name / Address — required even in manual-entry mode
+    if (!$('reg-school') || !$('reg-school').value.trim())       { showStepError(3, 'School Name is required.'); return false; }
+    if (!$('reg-schooladdr') || !$('reg-schooladdr').value.trim()) { showStepError(3, 'School Address is required.'); return false; }
+
     // School — Year Level first, then Course, then optional Specialization
+    // Each supports a manual "not listed" fallback alongside the dropdown.
+    var yearManualEl = $('reg-yearlevel-manual');
+    var yearIsManual = $('reg-yearlevel') && $('reg-yearlevel').value === '__manual';
     if (!$('reg-yearlevel') || !$('reg-yearlevel').value) { showStepError(3, 'Please select your year level.'); return false; }
+    if (yearIsManual && (!yearManualEl || !yearManualEl.value.trim())) { showStepError(3, 'Please type your year level.'); yearManualEl?.focus(); return false; }
+
+    var courseManualEl = $('reg-course-manual');
+    var courseIsManual = $('reg-course') && $('reg-course').value === '__manual';
     if (!$('reg-course') || !$('reg-course').value)       { showStepError(3, 'Please select your program / course.'); return false; }
-    // Specialization: required only when the row is visible
+    if (courseIsManual && (!courseManualEl || !courseManualEl.value.trim())) { showStepError(3, 'Please type your program / course.'); courseManualEl?.focus(); return false; }
+
+    // Specialization: required only when the row is visible AND course is a
+    // normal (non-manual) selection — manual course makes specialization optional.
     var specRow = $('specialization-row');
-    if (specRow && !specRow.classList.contains('hidden')) {
+    if (specRow && !specRow.classList.contains('hidden') && !courseIsManual) {
       if (!$('reg-specialization') || !$('reg-specialization').value) {
         showStepError(3, 'Please select your major / specialization.'); return false;
       }
@@ -613,31 +627,56 @@ async function validateStep(step) {
     // Monthly Income
     if (!$('reg-income') || !$('reg-income').value)    { showStepError(3, 'Please select your combined monthly income bracket.'); return false; }
 
-    // ── Parent Information (required) ────────────────────────────────────────
+    // ── Parent Information ─────────────────────────────────────────────────
+    // Name is always required (it identifies the parent even if deceased);
+    // contact/employer/address are skipped when the "deceased" box is checked.
+    var fDeceased = !!($('father-deceased') && $('father-deceased').checked);
     var fFname    = ($('father-fname')||{}).value?.trim();
     var fLname    = ($('father-lname')||{}).value?.trim();
-    var fPhone    = ($('father-phone')||{}).value?.replace(/\D/g,'') || '';
-    var fEmployer = ($('father-employer')||{}).value?.trim();
-    var fAddr     = ($('father-addr-hidden')||{}).value?.trim();
     if (!fFname) { showStepError(3, "Father's first name is required."); $('father-fname')?.focus(); return false; }
     if (!fLname) { showStepError(3, "Father's last name is required.");  $('father-lname')?.focus(); return false; }
-    if (!fPhone || fPhone.length < 10) { showStepError(3, "Father's contact number must be 10 digits."); $('father-phone')?.focus(); return false; }
-    if (fPhone[0] !== '9') { showStepError(3, "Father's contact number must start with 9."); $('father-phone')?.focus(); return false; }
-    if (!fEmployer) { showStepError(3, "Father's employer / company is required."); $('father-employer')?.focus(); return false; }
-    // Address required unless "Same as Permanent" is checked (which populates the hidden field)
-    if (!fAddr) { showStepError(3, "Father's address is required. Select from the dropdowns or check \"Same as Permanent\"."); $('father-region')?.focus(); return false; }
+    var fPhone = '', fEmployer = '', fAddr = '';
+    if (!fDeceased) {
+      fPhone    = ($('father-phone')||{}).value?.replace(/\D/g,'') || '';
+      fEmployer = ($('father-employer')||{}).value?.trim();
+      fAddr     = ($('father-addr-hidden')||{}).value?.trim();
+      if (!fPhone || fPhone.length < 10) { showStepError(3, "Father's contact number must be 10 digits."); $('father-phone')?.focus(); return false; }
+      if (fPhone[0] !== '9') { showStepError(3, "Father's contact number must start with 9."); $('father-phone')?.focus(); return false; }
+      if (!fEmployer) { showStepError(3, "Father's employer / company is required."); $('father-employer')?.focus(); return false; }
+      // Address required unless "Same as Permanent" is checked (which populates the hidden field)
+      if (!fAddr) { showStepError(3, "Father's address is required. Select from the dropdowns or check \"Same as Permanent\"."); $('father-region')?.focus(); return false; }
+    }
 
+    var mDeceased = !!($('mother-deceased') && $('mother-deceased').checked);
     var mFname    = ($('mother-fname')||{}).value?.trim();
     var mLname    = ($('mother-lname')||{}).value?.trim();
-    var mPhone    = ($('mother-phone')||{}).value?.replace(/\D/g,'') || '';
-    var mEmployer = ($('mother-employer')||{}).value?.trim();
-    var mAddr     = ($('mother-addr-hidden')||{}).value?.trim();
     if (!mFname) { showStepError(3, "Mother's first name is required."); $('mother-fname')?.focus(); return false; }
     if (!mLname) { showStepError(3, "Mother's last name is required.");  $('mother-lname')?.focus(); return false; }
-    if (!mPhone || mPhone.length < 10) { showStepError(3, "Mother's contact number must be 10 digits."); $('mother-phone')?.focus(); return false; }
-    if (mPhone[0] !== '9') { showStepError(3, "Mother's contact number must start with 9."); $('mother-phone')?.focus(); return false; }
-    if (!mEmployer) { showStepError(3, "Mother's employer / company is required."); $('mother-employer')?.focus(); return false; }
-    if (!mAddr) { showStepError(3, "Mother's address is required. Select from the dropdowns or check \"Same as Permanent\"."); $('mother-region')?.focus(); return false; }
+    var mPhone = '', mEmployer = '', mAddr = '';
+    if (!mDeceased) {
+      mPhone    = ($('mother-phone')||{}).value?.replace(/\D/g,'') || '';
+      mEmployer = ($('mother-employer')||{}).value?.trim();
+      mAddr     = ($('mother-addr-hidden')||{}).value?.trim();
+      if (!mPhone || mPhone.length < 10) { showStepError(3, "Mother's contact number must be 10 digits."); $('mother-phone')?.focus(); return false; }
+      if (mPhone[0] !== '9') { showStepError(3, "Mother's contact number must start with 9."); $('mother-phone')?.focus(); return false; }
+      if (!mEmployer) { showStepError(3, "Mother's employer / company is required."); $('mother-employer')?.focus(); return false; }
+      if (!mAddr) { showStepError(3, "Mother's address is required. Select from the dropdowns or check \"Same as Permanent\"."); $('mother-region')?.focus(); return false; }
+    }
+
+    // ── Guardian Information (required only when BOTH parents are deceased) ──
+    if (fDeceased && mDeceased) {
+      var gFname = ($('guardian-fname')||{}).value?.trim();
+      var gLname = ($('guardian-lname')||{}).value?.trim();
+      var gRel   = ($('guardian-relationship')||{}).value?.trim();
+      var gPhone = ($('guardian-phone')||{}).value?.replace(/\D/g,'') || '';
+      var gAddr  = ($('guardian-addr-hidden')||{}).value?.trim();
+      if (!gFname) { showStepError(3, "Guardian's first name is required."); $('guardian-fname')?.focus(); return false; }
+      if (!gLname) { showStepError(3, "Guardian's last name is required.");  $('guardian-lname')?.focus(); return false; }
+      if (!gRel)   { showStepError(3, "Guardian's relationship to the resident is required."); $('guardian-relationship')?.focus(); return false; }
+      if (!gPhone || gPhone.length < 10) { showStepError(3, "Guardian's contact number must be 10 digits."); $('guardian-phone')?.focus(); return false; }
+      if (gPhone[0] !== '9') { showStepError(3, "Guardian's contact number must start with 9."); $('guardian-phone')?.focus(); return false; }
+      if (!gAddr)  { showStepError(3, "Guardian's address is required. Select from the dropdowns or check \"Same as Permanent\"."); $('guardian-region')?.focus(); return false; }
+    }
 
     hideStepError(3);
     return true;
@@ -1225,7 +1264,7 @@ function toggleSameAsPresent() {
 
 // Initialize address dropdowns on page load
 async function initAddrDropdowns() {
-  var prefixes = ['pres', 'perm', 'father', 'mother'];
+  var prefixes = ['pres', 'perm', 'father', 'mother', 'guardian'];
   var data = await psgcFetchAddr('regions');
   prefixes.forEach(function(prefix) {
     var el = $(prefix + '-region');
@@ -1593,36 +1632,69 @@ async function completeRegistration() {
     fd.append('permanentAddress', permAddr);
     fd.append('location',        presAddr);
 
-    // School
-    fd.append('schoolName',   $('reg-school') ? $('reg-school').value : 'Aurora State College of Technology');
-    fd.append('schoolAddress', $('reg-schooladdr') ? $('reg-schooladdr').value : 'Zabali, Baler, Aurora');
-    fd.append('yearLevel',    $('reg-yearlevel') ? $('reg-yearlevel').options[$('reg-yearlevel').selectedIndex].text : '');
+    // School — either the default (readonly) value or whatever was manually typed
+    fd.append('schoolName',   $('reg-school') ? $('reg-school').value.trim() : 'Aurora State College of Technology');
+    fd.append('schoolAddress', $('reg-schooladdr') ? $('reg-schooladdr').value.trim() : 'Zabali, Baler, Aurora');
+
+    // Year Level — manual text wins over the dropdown label when "not listed" was chosen
+    var yearIsManual = $('reg-yearlevel') && $('reg-yearlevel').value === '__manual';
+    var yearLevelVal = yearIsManual
+      ? (($('reg-yearlevel-manual')||{}).value||'').trim()
+      : ($('reg-yearlevel') ? $('reg-yearlevel').options[$('reg-yearlevel').selectedIndex].text : '');
+    fd.append('yearLevel', yearLevelVal);
+
     // Course: if a specialization was selected, its value IS the specific course code
     // (e.g. BSIT-AP); otherwise the family key equals the code for single-track programs.
+    // Manual course/specialization text (typed when "not listed" was chosen) takes priority.
+    var courseIsManual = $('reg-course') && $('reg-course').value === '__manual';
     var specRow  = $('specialization-row');
     var specSel  = $('reg-specialization');
-    var specVal  = (specRow && !specRow.classList.contains('hidden') && specSel && specSel.value)
-                    ? specSel.value : '';
-    var courseVal = specVal || ($('reg-course') ? $('reg-course').value : '');
+    var specIsManual = !specSel || specSel.classList.contains('hidden');
+    var specVal, courseVal;
+    if (courseIsManual) {
+      courseVal = (($('reg-course-manual')||{}).value||'').trim();
+      specVal   = specIsManual ? (($('reg-specialization-manual')||{}).value||'').trim() : '';
+    } else {
+      specVal   = (specRow && !specRow.classList.contains('hidden') && specSel && specSel.value) ? specSel.value : '';
+      courseVal = specVal || ($('reg-course') ? $('reg-course').value : '');
+    }
     fd.append('course',         courseVal);
     fd.append('specialization', specVal);
-    console.log('[REG] course=' + courseVal + ' specialization=' + (specVal || '(none)'));
+    console.log('[REG] course=' + courseVal + ' (manual=' + courseIsManual + ') specialization=' + (specVal || '(none)'));
 
-    // Family info
+    // Family info — "deceased" is recorded on the JSON blob itself so the
+    // shape stays identical to how the backend has always stored it; no new
+    // top-level fields required. Contact/employer/address are left blank
+    // when deceased (toggleParentDeceased() already clears them client-side).
+    var fatherDeceased = !!($('father-deceased') && $('father-deceased').checked);
+    var motherDeceased = !!($('mother-deceased') && $('mother-deceased').checked);
     var fatherInfo = JSON.stringify({
       firstName: ($('father-fname')||{}).value||'', middleName: ($('father-mname')||{}).value||'',
       lastName:  ($('father-lname')||{}).value||'', suffix:     ($('father-suffix')||{}).value||'',
       phone:     ($('father-phone')||{}).value||'', employer:   ($('father-employer')||{}).value||'',
-      address:   ($('father-addr-hidden')||{}).value||''
+      address:   ($('father-addr-hidden')||{}).value||'', deceased: fatherDeceased
     });
     var motherInfo = JSON.stringify({
       firstName: ($('mother-fname')||{}).value||'', middleName: ($('mother-mname')||{}).value||'',
       lastName:  ($('mother-lname')||{}).value||'', suffix:     ($('mother-suffix')||{}).value||'',
       phone:     ($('mother-phone')||{}).value||'', employer:   ($('mother-employer')||{}).value||'',
-      address:   ($('mother-addr-hidden')||{}).value||''
+      address:   ($('mother-addr-hidden')||{}).value||'', deceased: motherDeceased
     });
     fd.append('fatherInfo',    fatherInfo);
     fd.append('motherInfo',    motherInfo);
+
+    // Guardian info — only meaningful (and only validated) when both parents
+    // are deceased, but we send it whenever present so nothing is silently lost.
+    if (fatherDeceased && motherDeceased) {
+      var guardianInfo = JSON.stringify({
+        firstName: ($('guardian-fname')||{}).value||'', middleName: ($('guardian-mname')||{}).value||'',
+        lastName:  ($('guardian-lname')||{}).value||'', suffix:     ($('guardian-suffix')||{}).value||'',
+        relationship: ($('guardian-relationship')||{}).value||'',
+        phone:     ($('guardian-phone')||{}).value||'', employer:   ($('guardian-employer')||{}).value||'',
+        address:   ($('guardian-addr-hidden')||{}).value||''
+      });
+      fd.append('guardianInfo', guardianInfo);
+    }
     fd.append('monthlyIncome', $('reg-income') ? $('reg-income').value : '');
 
     // Attach DAMIS document files
@@ -2863,9 +2935,43 @@ function ascotFamily(familyKey) {
 //
 function onYearLevelChange() {
   var yearSel   = $('reg-yearlevel');
+  var yearManual = $('reg-yearlevel-manual');
   var courseSel = $('reg-course');
   var specRow   = $('specialization-row');
   var specSel   = $('reg-specialization');
+
+  // Manual year level — cascade can't filter by year, so show the FULL
+  // course list (still deduped by family) instead of leaving it empty.
+  if (yearSel && yearSel.value === '__manual') {
+    if (yearManual) { yearManual.classList.remove('hidden'); yearManual.focus(); }
+    if (courseSel) {
+      courseSel.innerHTML = '<option value="">\u2014 Select Program / Course \u2014</option>';
+      courseSel.disabled = false;
+      var seenAll = {}, bySchoolAll = {};
+      ASCOT_COURSES.forEach(function(c) {
+        if (seenAll[c.family]) return;
+        seenAll[c.family] = true;
+        if (!bySchoolAll[c.school]) bySchoolAll[c.school] = [];
+        bySchoolAll[c.school].push(c);
+      });
+      Object.keys(bySchoolAll).sort().forEach(function(school) {
+        var og = document.createElement('optgroup'); og.label = school;
+        bySchoolAll[school].forEach(function(c) {
+          var opt = document.createElement('option');
+          opt.value = c.family; opt.textContent = c.familyLabel;
+          og.appendChild(opt);
+        });
+        courseSel.appendChild(og);
+      });
+      var manualOptAll = document.createElement('option');
+      manualOptAll.value = '__manual'; manualOptAll.textContent = 'Not listed — type manually';
+      courseSel.appendChild(manualOptAll);
+    }
+    if (specRow) specRow.classList.add('hidden');
+    console.log('[ASCOT] Year level set to manual — showing full unfiltered course list');
+    return;
+  }
+  if (yearManual) { yearManual.classList.add('hidden'); yearManual.value = ''; }
 
   var yearVal = yearSel ? parseInt(yearSel.value, 10) : 0;
 
@@ -2963,6 +3069,49 @@ function onYearLevelChange() {
   var totalShown = Object.keys(seenFamilies).length;
   console.log('[ASCOT] Year ' + yearVal + ' → ' + visible.length +
     ' programs visible → ' + totalShown + ' unique course entries in dropdown');
+
+  // Manual-entry fallback — always appended last so it never collides with a
+  // real family key, and always available even if the filtered list is short.
+  if (courseSel) {
+    var manualOpt = document.createElement('option');
+    manualOpt.value = '__manual';
+    manualOpt.textContent = 'Not listed — type manually';
+    courseSel.appendChild(manualOpt);
+  }
+  toggleCourseManualInput(false); // reset to dropdown mode whenever year level changes
+}
+
+// ── Manual-entry toggle: Program/Course ───────────────────────────────────
+// Swaps between the cascading <select> and a free-text input (with datalist
+// suggestions) when the resident's course isn't in ASCOT_COURSES.
+function toggleCourseManualInput(showManual) {
+  var sel    = $('reg-course');
+  var manual = $('reg-course-manual');
+  if (!sel || !manual) return;
+  if (showManual) {
+    sel.classList.add('hidden');
+    manual.classList.remove('hidden');
+    manual.focus();
+  } else {
+    sel.classList.remove('hidden');
+    manual.classList.add('hidden');
+    manual.value = '';
+  }
+}
+
+function toggleSpecializationManualInput(showManual) {
+  var sel    = $('reg-specialization');
+  var manual = $('reg-specialization-manual');
+  if (!sel || !manual) return;
+  if (showManual) {
+    sel.classList.add('hidden');
+    manual.classList.remove('hidden');
+    manual.focus();
+  } else {
+    sel.classList.remove('hidden');
+    manual.classList.add('hidden');
+    manual.value = '';
+  }
 }
 
 // ── Course → Specialization cascade ──────────────────────────────────────────
@@ -2980,6 +3129,23 @@ function onCourseChange() {
   if (!specRow || !specSel) return;
 
   var familyKey = courseSel ? courseSel.value : '';
+
+  // Manual course entry — no specialization cascade is possible, so expose
+  // the specialization field as free text too (with suggestions) instead.
+  if (familyKey === '__manual') {
+    toggleCourseManualInput(true);
+    specSel.innerHTML = '<option value="">\u2014 Select Major / Specialization \u2014</option>';
+    toggleSpecializationManualInput(true);
+    specRow.classList.remove('hidden');
+    var specLabel = specRow.querySelector('label');
+    if (specLabel) specLabel.innerHTML = '<i class="fa-solid fa-diagram-project text-purple-400 mr-1"></i>Major / Specialization <span class="text-slate-300 font-normal">(optional)</span>';
+    console.log('[ASCOT] Manual course entry — specialization is now optional free text');
+    return;
+  }
+  toggleCourseManualInput(false);
+  toggleSpecializationManualInput(false);
+  var specLabelReset = specRow.querySelector('label');
+  if (specLabelReset) specLabelReset.innerHTML = '<i class="fa-solid fa-diagram-project text-purple-400 mr-1"></i>Major / Specialization <span class="text-red-400">*</span>';
 
   // Reset specialization
   specSel.innerHTML = '<option value="">\u2014 Select Major / Specialization \u2014</option>';
@@ -3150,5 +3316,33 @@ document.addEventListener('DOMContentLoaded', async function(){
   setupBirthdayField();
   await checkUrlParams();
   $('terms-modal').addEventListener('click', function(e){ if (e.target === $('terms-modal')) closeTerms(); });
+  populateManualEntrySuggestions();
   console.log('PGA-DAMIS auth module loaded ✅ (v2 enhanced)');
 });
+
+// ── Datalist suggestions for manual Course / Specialization entry ─────────
+// Drawn once from the same ASCOT_COURSES data the dropdowns use, so manual
+// typists still get relevant autocomplete instead of a blank free-text box.
+function populateManualEntrySuggestions() {
+  var courseList = $('course-suggestions');
+  var specList    = $('specialization-suggestions');
+  if (courseList) {
+    var seenLabels = {};
+    ASCOT_COURSES.forEach(function(c) {
+      if (seenLabels[c.familyLabel]) return;
+      seenLabels[c.familyLabel] = true;
+      var opt = document.createElement('option'); opt.value = c.familyLabel;
+      courseList.appendChild(opt);
+    });
+  }
+  if (specList) {
+    var seenMajors = {};
+    ASCOT_COURSES.forEach(function(c) {
+      if (!c.major || seenMajors[c.major]) return;
+      seenMajors[c.major] = true;
+      var opt = document.createElement('option'); opt.value = c.major;
+      specList.appendChild(opt);
+    });
+  }
+  console.log('[ASCOT] Manual-entry datalist suggestions populated');
+}

@@ -159,7 +159,7 @@ router.post('/api/auth/complete-registration', ...uploadIdDocs, async (req, res)
       // DAMIS new fields
       civilStatus, presentAddress, permanentAddress,
       schoolName, course, yearLevel, schoolAddress, specialization,
-      fatherInfo, motherInfo, monthlyIncome,
+      fatherInfo, motherInfo, guardianInfo, monthlyIncome,
       avatarFaceX, avatarFaceY,
     } = req.body;
     if (!firstName?.trim()) return res.status(400).json({ error: 'First name is required.' });
@@ -217,6 +217,7 @@ router.post('/api/auth/complete-registration', ...uploadIdDocs, async (req, res)
       specialization:   specialization?.trim()  || '',
       fatherInfo:       fatherInfo              || '',
       motherInfo:       motherInfo              || '',
+      guardianInfo:     guardianInfo            || '',
       monthlyIncome:    monthlyIncome?.trim()    || '',
       avatar:           req.idDocUrls?.avatar    || pg?.avatar || '',
       avatarFaceX:      parseInt(avatarFaceX, 10) || 50,
@@ -243,6 +244,7 @@ router.post('/api/auth/complete-registration', ...uploadIdDocs, async (req, res)
       course:           course || '(not set)',
       specialization:   specialization || '(none)',
       monthlyIncome:    monthlyIncome || '(not set)',
+      guardianInfo:     guardianInfo ? '(provided — both parents marked deceased)' : '(none)',
       authProvider:     pg ? 'google' : 'local',
     });
 

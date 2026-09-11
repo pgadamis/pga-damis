@@ -69,6 +69,7 @@ db.exec(`
     school_address TEXT DEFAULT '',
     father_info    TEXT DEFAULT '',
     mother_info    TEXT DEFAULT '',
+    guardian_info  TEXT DEFAULT '',
     monthly_income TEXT DEFAULT '',
     avatar         TEXT DEFAULT '',
     cover_photo    TEXT DEFAULT '',
@@ -314,6 +315,7 @@ db.exec(`
     school_address      TEXT DEFAULT '',
     father_info         TEXT DEFAULT '',
     mother_info         TEXT DEFAULT '',
+    guardian_info       TEXT DEFAULT '',
     monthly_income      TEXT DEFAULT '',
     id_front_url        TEXT DEFAULT '',
     id_back_url         TEXT DEFAULT '',
@@ -376,6 +378,7 @@ migrate(`ALTER TABLE rejected_registrations ADD COLUMN father_info       TEXT DE
 migrate(`ALTER TABLE rejected_registrations ADD COLUMN mother_info       TEXT DEFAULT ''`);
 migrate(`ALTER TABLE rejected_registrations ADD COLUMN monthly_income    TEXT DEFAULT ''`);
 migrate(`ALTER TABLE rejected_registrations ADD COLUMN specialization    TEXT DEFAULT ''`);
+migrate(`ALTER TABLE rejected_registrations ADD COLUMN guardian_info     TEXT DEFAULT ''`);
 migrate(`ALTER TABLE posts ADD COLUMN moderated_by TEXT DEFAULT NULL`);    // 'ai' | 'admin' | NULL
 migrate(`ALTER TABLE posts ADD COLUMN ai_reviewed_at TEXT DEFAULT NULL`);  // set when AI reviews (even if no action taken)
 migrate(`ALTER TABLE comments ADD COLUMN parent_id TEXT DEFAULT NULL`);
@@ -465,6 +468,7 @@ migrate(`ALTER TABLE users ADD COLUMN monthly_income     TEXT DEFAULT ''`);
 migrate(`ALTER TABLE users ADD COLUMN avatar_face_x      INTEGER DEFAULT 50`);
 migrate(`ALTER TABLE users ADD COLUMN avatar_face_y      INTEGER DEFAULT 50`);
 migrate(`ALTER TABLE users ADD COLUMN specialization     TEXT DEFAULT ''`);
+migrate(`ALTER TABLE users ADD COLUMN guardian_info      TEXT DEFAULT ''`);
 // ── PGA-DAMIS cert doc columns on id_verification_requests ────────────
 migrate(`ALTER TABLE id_verification_requests ADD COLUMN cert_residency_url   TEXT DEFAULT ''`);
 migrate(`ALTER TABLE id_verification_requests ADD COLUMN cert_low_income_url  TEXT DEFAULT ''`);
@@ -549,9 +553,9 @@ function createUser(userData) {
     INSERT INTO users (id, google_id, email, password, first_name, middle_name, last_name,
       suffix, username, birthday, sex, civil_status, phone, bio, location,
       present_address, permanent_address, school_name, course, year_level, school_address,
-      father_info, mother_info, monthly_income, specialization,
+      father_info, mother_info, guardian_info, monthly_income, specialization,
       avatar, avatar_face_x, avatar_face_y, email_verified, id_verified, auth_provider, role, account_status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     userData.googleId || null,
@@ -576,6 +580,7 @@ function createUser(userData) {
     userData.schoolAddress || '',
     userData.fatherInfo || '',
     userData.motherInfo || '',
+    userData.guardianInfo || '',
     userData.monthlyIncome || '',
     userData.specialization || '',
     userData.avatar || '',
@@ -645,6 +650,7 @@ function dbRowToUser(row) {
     schoolAddress:    row.school_address    || '',
     fatherInfo:       row.father_info       || '',
     motherInfo:       row.mother_info       || '',
+    guardianInfo:     row.guardian_info     || '',
     monthlyIncome:    row.monthly_income    || '',
     avatarFaceX:      row.avatar_face_x     ?? 50,
     avatarFaceY:      row.avatar_face_y     ?? 50,
@@ -1076,12 +1082,12 @@ function archiveRejectedRegistration({ user, idDocs, reason, rejectedBy }) {
        birthday, sex, bio, location, avatar, auth_provider,
        civil_status, present_address, permanent_address,
        school_name, school_address, year_level, course, specialization,
-       father_info, mother_info, monthly_income,
+       father_info, mother_info, guardian_info, monthly_income,
        id_front_url, id_back_url, selfie_url, id_type,
        cert_residency_url, cert_low_income_url, cert_enrollment_url,
        rejection_reason, rejected_by, original_created_at, password_hash,
        avatar_face_x, avatar_face_y)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     id, user.id, user.firstName, user.middleName||'', user.lastName, user.suffix||'',
     user.username, user.email, user.phone||'', user.birthday||'', user.sex||'',
@@ -1089,7 +1095,7 @@ function archiveRejectedRegistration({ user, idDocs, reason, rejectedBy }) {
     // ── Full registration fields ──
     user.civilStatus||'', user.presentAddress||'', user.permanentAddress||'',
     user.schoolName||'', user.schoolAddress||'', user.yearLevel||'', user.course||'', user.specialization||'',
-    user.fatherInfo||'', user.motherInfo||'', user.monthlyIncome||'',
+    user.fatherInfo||'', user.motherInfo||'', user.guardianInfo||'', user.monthlyIncome||'',
     // ── Documents ──
     idDocs?.id_front_url||'', idDocs?.id_back_url||'', idDocs?.selfie_url||'', idDocs?.id_type||'',
     idDocs?.cert_residency_url||'', idDocs?.cert_low_income_url||'', idDocs?.cert_enrollment_url||'',
@@ -1596,7 +1602,7 @@ function getPendingAccounts() {
            u.birthday, u.sex, u.civil_status, u.bio, u.location,
            u.present_address, u.permanent_address,
            u.school_name, u.course, u.year_level, u.school_address, u.specialization,
-           u.father_info, u.mother_info, u.monthly_income,
+           u.father_info, u.mother_info, u.guardian_info, u.monthly_income,
            u.created_at, u.auth_provider,
            u.avatar_face_x, u.avatar_face_y,
            ivr.id as verif_id, ivr.id_front_url, ivr.id_back_url, ivr.selfie_url, ivr.id_type,
@@ -1959,6 +1965,7 @@ migrate(`ALTER TABLE utility_bills ADD COLUMN image_url TEXT DEFAULT ''`);
 // ── v3 semester / admission slip migrations ────────────────────────────────────
 // Semester tag on deleted_users so we can filter by semester for re-enrollment
 migrate(`ALTER TABLE deleted_users ADD COLUMN semester_tag TEXT DEFAULT ''`);
+migrate(`ALTER TABLE deleted_users ADD COLUMN guardian_info TEXT DEFAULT ''`);
 // Per-user admission slip serial counter (reset each semester rollover)
 migrate(`ALTER TABLE users ADD COLUMN admission_no TEXT DEFAULT ''`);
 
@@ -2168,11 +2175,11 @@ function semesterRollover(newSemester, schoolYear, newSlipValidTo, adminId) {
       (id, original_id, first_name, middle_name, last_name, suffix, username, email, phone,
        birthday, sex, civil_status, bio, location, avatar, auth_provider, role,
        present_address, permanent_address, school_name, course, year_level, school_address,
-       father_info, mother_info, monthly_income,
+       father_info, mother_info, guardian_info, monthly_income,
        id_front_url, id_back_url, selfie_url,
        cert_residency_url, cert_low_income_url, cert_enrollment_url,
        original_created_at, deleted_by, semester_tag)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `);
 
   db.transaction(() => {
@@ -2186,7 +2193,7 @@ function semesterRollover(newSemester, schoolYear, newSlipValidTo, adminId) {
           u.avatar || '', u.auth_provider || 'local', u.role || 'user',
           u.present_address || '', u.permanent_address || '',
           u.school_name || '', u.course || '', u.year_level || '', u.school_address || '',
-          u.father_info || '', u.mother_info || '', u.monthly_income || '',
+          u.father_info || '', u.mother_info || '', u.guardian_info || '', u.monthly_income || '',
           u.id_front_url || '', u.id_back_url || '', u.selfie_url || '',
           u.cert_residency_url || '', u.cert_low_income_url || '', u.cert_enrollment_url || '',
           u.created_at || '', adminId, semesterTag
