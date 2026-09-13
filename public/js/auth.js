@@ -603,23 +603,36 @@ async function validateStep(step) {
     if (!$('reg-school') || !$('reg-school').value.trim())       { showStepError(3, 'School Name is required.'); return false; }
     if (!$('reg-schooladdr') || !$('reg-schooladdr').value.trim()) { showStepError(3, 'School Address is required.'); return false; }
 
-    // School — Year Level first, then Course, then optional Specialization
-    // Each supports a manual "not listed" fallback alongside the dropdown.
+    // School — Year Level first, then Course, then optional Specialization.
+    // Each has an independent "Not listed" checkbox — checked means the
+    // dropdown is irrelevant and only its plain-text sibling is validated.
     var yearManualEl = $('reg-yearlevel-manual');
-    var yearIsManual = $('reg-yearlevel') && $('reg-yearlevel').value === '__manual';
-    if (!$('reg-yearlevel') || !$('reg-yearlevel').value) { showStepError(3, 'Please select your year level.'); return false; }
-    if (yearIsManual && (!yearManualEl || !yearManualEl.value.trim())) { showStepError(3, 'Please type your year level.'); yearManualEl?.focus(); return false; }
+    var yearIsManual = !!($('yearlevel-manual-toggle') && $('yearlevel-manual-toggle').checked);
+    if (yearIsManual) {
+      if (!yearManualEl || !yearManualEl.value.trim()) { showStepError(3, 'Please type your year level.'); yearManualEl?.focus(); return false; }
+    } else {
+      if (!$('reg-yearlevel') || !$('reg-yearlevel').value) { showStepError(3, 'Please select your year level.'); return false; }
+    }
 
     var courseManualEl = $('reg-course-manual');
-    var courseIsManual = $('reg-course') && $('reg-course').value === '__manual';
-    if (!$('reg-course') || !$('reg-course').value)       { showStepError(3, 'Please select your program / course.'); return false; }
-    if (courseIsManual && (!courseManualEl || !courseManualEl.value.trim())) { showStepError(3, 'Please type your program / course.'); courseManualEl?.focus(); return false; }
+    var courseIsManual = !!($('course-manual-toggle') && $('course-manual-toggle').checked);
+    if (courseIsManual) {
+      if (!courseManualEl || !courseManualEl.value.trim()) { showStepError(3, 'Please type your program / course.'); courseManualEl?.focus(); return false; }
+    } else {
+      if (!$('reg-course') || !$('reg-course').value) { showStepError(3, 'Please select your program / course.'); return false; }
+    }
 
-    // Specialization: required only when the row is visible AND course is a
-    // normal (non-manual) selection — manual course makes specialization optional.
+    // Specialization: required only when the row is visible. Manual course
+    // entry forces specialization to optional free text (no cascade exists
+    // for a course we don't recognize); otherwise it follows its own toggle.
     var specRow = $('specialization-row');
     if (specRow && !specRow.classList.contains('hidden') && !courseIsManual) {
-      if (!$('reg-specialization') || !$('reg-specialization').value) {
+      var specIsManual = !!($('specialization-manual-toggle') && $('specialization-manual-toggle').checked);
+      if (specIsManual) {
+        if (!$('reg-specialization-manual') || !$('reg-specialization-manual').value.trim()) {
+          showStepError(3, 'Please type your major / specialization.'); return false;
+        }
+      } else if (!$('reg-specialization') || !$('reg-specialization').value) {
         showStepError(3, 'Please select your major / specialization.'); return false;
       }
     }
@@ -1636,8 +1649,8 @@ async function completeRegistration() {
     fd.append('schoolName',   $('reg-school') ? $('reg-school').value.trim() : 'Aurora State College of Technology');
     fd.append('schoolAddress', $('reg-schooladdr') ? $('reg-schooladdr').value.trim() : 'Zabali, Baler, Aurora');
 
-    // Year Level — manual text wins over the dropdown label when "not listed" was chosen
-    var yearIsManual = $('reg-yearlevel') && $('reg-yearlevel').value === '__manual';
+    // Year Level — manual text wins over the dropdown label when "Not listed" is checked
+    var yearIsManual = !!($('yearlevel-manual-toggle') && $('yearlevel-manual-toggle').checked);
     var yearLevelVal = yearIsManual
       ? (($('reg-yearlevel-manual')||{}).value||'').trim()
       : ($('reg-yearlevel') ? $('reg-yearlevel').options[$('reg-yearlevel').selectedIndex].text : '');
@@ -1645,15 +1658,18 @@ async function completeRegistration() {
 
     // Course: if a specialization was selected, its value IS the specific course code
     // (e.g. BSIT-AP); otherwise the family key equals the code for single-track programs.
-    // Manual course/specialization text (typed when "not listed" was chosen) takes priority.
-    var courseIsManual = $('reg-course') && $('reg-course').value === '__manual';
+    // Manual course/specialization text (typed when "Not listed" is checked) takes priority.
+    var courseIsManual = !!($('course-manual-toggle') && $('course-manual-toggle').checked);
     var specRow  = $('specialization-row');
     var specSel  = $('reg-specialization');
-    var specIsManual = !specSel || specSel.classList.contains('hidden');
+    var specIsManual = !!($('specialization-manual-toggle') && $('specialization-manual-toggle').checked);
     var specVal, courseVal;
     if (courseIsManual) {
       courseVal = (($('reg-course-manual')||{}).value||'').trim();
-      specVal   = specIsManual ? (($('reg-specialization-manual')||{}).value||'').trim() : '';
+      specVal   = (($('reg-specialization-manual')||{}).value||'').trim();
+    } else if (specIsManual) {
+      specVal   = (($('reg-specialization-manual')||{}).value||'').trim();
+      courseVal = specVal || ($('reg-course') ? $('reg-course').value : '');
     } else {
       specVal   = (specRow && !specRow.classList.contains('hidden') && specSel && specSel.value) ? specSel.value : '';
       courseVal = specVal || ($('reg-course') ? $('reg-course').value : '');
@@ -2935,43 +2951,9 @@ function ascotFamily(familyKey) {
 //
 function onYearLevelChange() {
   var yearSel   = $('reg-yearlevel');
-  var yearManual = $('reg-yearlevel-manual');
   var courseSel = $('reg-course');
   var specRow   = $('specialization-row');
   var specSel   = $('reg-specialization');
-
-  // Manual year level — cascade can't filter by year, so show the FULL
-  // course list (still deduped by family) instead of leaving it empty.
-  if (yearSel && yearSel.value === '__manual') {
-    if (yearManual) { yearManual.classList.remove('hidden'); yearManual.focus(); }
-    if (courseSel) {
-      courseSel.innerHTML = '<option value="">\u2014 Select Program / Course \u2014</option>';
-      courseSel.disabled = false;
-      var seenAll = {}, bySchoolAll = {};
-      ASCOT_COURSES.forEach(function(c) {
-        if (seenAll[c.family]) return;
-        seenAll[c.family] = true;
-        if (!bySchoolAll[c.school]) bySchoolAll[c.school] = [];
-        bySchoolAll[c.school].push(c);
-      });
-      Object.keys(bySchoolAll).sort().forEach(function(school) {
-        var og = document.createElement('optgroup'); og.label = school;
-        bySchoolAll[school].forEach(function(c) {
-          var opt = document.createElement('option');
-          opt.value = c.family; opt.textContent = c.familyLabel;
-          og.appendChild(opt);
-        });
-        courseSel.appendChild(og);
-      });
-      var manualOptAll = document.createElement('option');
-      manualOptAll.value = '__manual'; manualOptAll.textContent = 'Not listed — type manually';
-      courseSel.appendChild(manualOptAll);
-    }
-    if (specRow) specRow.classList.add('hidden');
-    console.log('[ASCOT] Year level set to manual — showing full unfiltered course list');
-    return;
-  }
-  if (yearManual) { yearManual.classList.add('hidden'); yearManual.value = ''; }
 
   var yearVal = yearSel ? parseInt(yearSel.value, 10) : 0;
 
@@ -3069,49 +3051,110 @@ function onYearLevelChange() {
   var totalShown = Object.keys(seenFamilies).length;
   console.log('[ASCOT] Year ' + yearVal + ' → ' + visible.length +
     ' programs visible → ' + totalShown + ' unique course entries in dropdown');
-
-  // Manual-entry fallback — always appended last so it never collides with a
-  // real family key, and always available even if the filtered list is short.
-  if (courseSel) {
-    var manualOpt = document.createElement('option');
-    manualOpt.value = '__manual';
-    manualOpt.textContent = 'Not listed — type manually';
-    courseSel.appendChild(manualOpt);
-  }
-  toggleCourseManualInput(false); // reset to dropdown mode whenever year level changes
 }
 
-// ── Manual-entry toggle: Program/Course ───────────────────────────────────
-// Swaps between the cascading <select> and a free-text input (with datalist
-// suggestions) when the resident's course isn't in ASCOT_COURSES.
-function toggleCourseManualInput(showManual) {
+// ── Manual-entry toggles ───────────────────────────────────────────────────
+// Independent checkboxes, deliberately NOT tied to any dropdown option value
+// or datalist/autocomplete — "not listed" means the resident's answer is not
+// among the fixed choices, so it must not be constrained back to them, and
+// the toggle state must not depend on (and reset with) the dropdown's value.
+
+function toggleYearLevelManualMode() {
+  var manual = $('yearlevel-manual-toggle').checked;
+  var sel    = $('reg-yearlevel');
+  var input  = $('reg-yearlevel-manual');
+  var hint   = $('yearlevel-hint');
+  if (manual) {
+    sel.classList.add('hidden');
+    input.classList.remove('hidden');
+    input.focus();
+    if (hint) hint.classList.add('hidden');
+    // Can't filter courses by an unknown/non-standard year level — fall back
+    // to letting the resident pick from the full unfiltered course list.
+    buildFullCourseList();
+  } else {
+    sel.classList.remove('hidden');
+    input.classList.add('hidden');
+    input.value = '';
+    if (hint) hint.classList.remove('hidden');
+    onYearLevelChange(); // rebuild the course list filtered by the select's current value
+  }
+  console.log('[DAMIS] Year Level manual entry = ' + manual);
+}
+
+function buildFullCourseList() {
+  var courseSel = $('reg-course');
+  var specRow   = $('specialization-row');
+  if (!courseSel) return;
+  courseSel.innerHTML = '<option value="">\u2014 Select Program / Course \u2014</option>';
+  courseSel.disabled = false;
+  var seen = {}, bySchool = {};
+  ASCOT_COURSES.forEach(function(c) {
+    if (seen[c.family]) return;
+    seen[c.family] = true;
+    if (!bySchool[c.school]) bySchool[c.school] = [];
+    bySchool[c.school].push(c);
+  });
+  Object.keys(bySchool).sort().forEach(function(school) {
+    var og = document.createElement('optgroup'); og.label = school;
+    bySchool[school].forEach(function(c) {
+      var opt = document.createElement('option');
+      opt.value = c.family; opt.textContent = c.familyLabel;
+      og.appendChild(opt);
+    });
+    courseSel.appendChild(og);
+  });
+  if (specRow) specRow.classList.add('hidden');
+  console.log('[ASCOT] Year level is manual — showing full unfiltered course list');
+}
+
+function toggleCourseManualMode() {
+  var manual = $('course-manual-toggle').checked;
   var sel    = $('reg-course');
-  var manual = $('reg-course-manual');
-  if (!sel || !manual) return;
-  if (showManual) {
+  var input  = $('reg-course-manual');
+  var specRow      = $('specialization-row');
+  var specSel      = $('reg-specialization');
+  var specManual   = $('reg-specialization-manual');
+  var specToggle   = $('specialization-manual-toggle');
+  var specToggleWrap = $('specialization-manual-toggle-wrap');
+  var specRequiredMark = $('specialization-required-mark');
+  if (manual) {
     sel.classList.add('hidden');
-    manual.classList.remove('hidden');
-    manual.focus();
+    input.classList.remove('hidden');
+    input.focus();
+    // No known majors for a manually-typed course — expose Specialization as
+    // an optional plain-text field instead of trying to cascade from it.
+    if (specRow) specRow.classList.remove('hidden');
+    if (specSel) specSel.classList.add('hidden');
+    if (specManual) specManual.classList.remove('hidden');
+    if (specToggleWrap) specToggleWrap.classList.add('hidden'); // already forced manual — no need to offer the toggle
+    if (specRequiredMark) { specRequiredMark.textContent = ''; specRequiredMark.classList.remove('text-red-400'); }
   } else {
     sel.classList.remove('hidden');
-    manual.classList.add('hidden');
-    manual.value = '';
+    input.classList.add('hidden');
+    input.value = '';
+    if (specToggleWrap) specToggleWrap.classList.remove('hidden');
+    if (specToggle) specToggle.checked = false;
+    if (specRequiredMark) { specRequiredMark.textContent = '*'; specRequiredMark.classList.add('text-red-400'); }
+    onCourseChange(); // rebuild the specialization cascade for whatever course is currently selected
   }
+  console.log('[DAMIS] Program/Course manual entry = ' + manual);
 }
 
-function toggleSpecializationManualInput(showManual) {
+function toggleSpecializationManualMode() {
+  var manual = $('specialization-manual-toggle').checked;
   var sel    = $('reg-specialization');
-  var manual = $('reg-specialization-manual');
-  if (!sel || !manual) return;
-  if (showManual) {
+  var input  = $('reg-specialization-manual');
+  if (manual) {
     sel.classList.add('hidden');
-    manual.classList.remove('hidden');
-    manual.focus();
+    input.classList.remove('hidden');
+    input.focus();
   } else {
     sel.classList.remove('hidden');
-    manual.classList.add('hidden');
-    manual.value = '';
+    input.classList.add('hidden');
+    input.value = '';
   }
+  console.log('[DAMIS] Major/Specialization manual entry = ' + manual);
 }
 
 // ── Course → Specialization cascade ──────────────────────────────────────────
@@ -3129,23 +3172,6 @@ function onCourseChange() {
   if (!specRow || !specSel) return;
 
   var familyKey = courseSel ? courseSel.value : '';
-
-  // Manual course entry — no specialization cascade is possible, so expose
-  // the specialization field as free text too (with suggestions) instead.
-  if (familyKey === '__manual') {
-    toggleCourseManualInput(true);
-    specSel.innerHTML = '<option value="">\u2014 Select Major / Specialization \u2014</option>';
-    toggleSpecializationManualInput(true);
-    specRow.classList.remove('hidden');
-    var specLabel = specRow.querySelector('label');
-    if (specLabel) specLabel.innerHTML = '<i class="fa-solid fa-diagram-project text-purple-400 mr-1"></i>Major / Specialization <span class="text-slate-300 font-normal">(optional)</span>';
-    console.log('[ASCOT] Manual course entry — specialization is now optional free text');
-    return;
-  }
-  toggleCourseManualInput(false);
-  toggleSpecializationManualInput(false);
-  var specLabelReset = specRow.querySelector('label');
-  if (specLabelReset) specLabelReset.innerHTML = '<i class="fa-solid fa-diagram-project text-purple-400 mr-1"></i>Major / Specialization <span class="text-red-400">*</span>';
 
   // Reset specialization
   specSel.innerHTML = '<option value="">\u2014 Select Major / Specialization \u2014</option>';
@@ -3316,33 +3342,5 @@ document.addEventListener('DOMContentLoaded', async function(){
   setupBirthdayField();
   await checkUrlParams();
   $('terms-modal').addEventListener('click', function(e){ if (e.target === $('terms-modal')) closeTerms(); });
-  populateManualEntrySuggestions();
   console.log('PGA-DAMIS auth module loaded ✅ (v2 enhanced)');
 });
-
-// ── Datalist suggestions for manual Course / Specialization entry ─────────
-// Drawn once from the same ASCOT_COURSES data the dropdowns use, so manual
-// typists still get relevant autocomplete instead of a blank free-text box.
-function populateManualEntrySuggestions() {
-  var courseList = $('course-suggestions');
-  var specList    = $('specialization-suggestions');
-  if (courseList) {
-    var seenLabels = {};
-    ASCOT_COURSES.forEach(function(c) {
-      if (seenLabels[c.familyLabel]) return;
-      seenLabels[c.familyLabel] = true;
-      var opt = document.createElement('option'); opt.value = c.familyLabel;
-      courseList.appendChild(opt);
-    });
-  }
-  if (specList) {
-    var seenMajors = {};
-    ASCOT_COURSES.forEach(function(c) {
-      if (!c.major || seenMajors[c.major]) return;
-      seenMajors[c.major] = true;
-      var opt = document.createElement('option'); opt.value = c.major;
-      specList.appendChild(opt);
-    });
-  }
-  console.log('[ASCOT] Manual-entry datalist suggestions populated');
-}
