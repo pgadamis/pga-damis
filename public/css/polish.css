@@ -1,0 +1,209 @@
+/* ════════════════════════════════════════════════════
+   public/css/polish.css
+   Mobile layout fixes + bottom-nav colour for the resident
+   pages. Loaded AFTER app.css so it wins on equal specificity.
+
+   Kept out of app.css deliberately: these are narrow,
+   reversible polish rules, so having them in one file means
+   they can be reviewed or dropped without touching the shared
+   stylesheet.
+
+   Linked from every page that renders #mobile-nav:
+     feed.html, notifications.html, search.html, profile.html
+   (messages.html has no bottom nav.)
+   ════════════════════════════════════════════════════ */
+
+/* ════════════════════════════════════════════════════
+   1. COMPOSER — mobile overflow
+   The "Create Post" box lays its controls out in two
+   non-wrapping flex rows. Below ~640px the avatar (40px),
+   card padding (32px) and gaps leave roughly 300px for the
+   column, which the Photo + privacy + char-count + Post row
+   overruns — pushing the Post button past the card edge, and
+   the AI row's Tags pill with it.
+
+   Selectors hang off #post-input (the textarea) and its
+   siblings, so no markup change is needed. The composer
+   column's children, in document order:
+       textarea#post-input
+       div#img-preview-wrap
+       div.justify-between   <- controls row
+       div (last child)      <- AI tools row
+   ════════════════════════════════════════════════════ */
+
+/* Without min-width:0 a flex item refuses to shrink below its
+   content width, which is what lets the row escape the card. */
+#post-input,
+#post-input ~ div {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 640px) {
+
+  /* ── Controls row: allow wrapping ── */
+  #post-input ~ div.justify-between {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+  #post-input ~ div.justify-between > div {
+    flex-wrap: wrap;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  /* Post gets its own full-width row — a 100%-wide primary action is
+     easier to hit than a 70px button crushed against the card edge. */
+  #post-btn {
+    flex: 1 1 100%;
+    order: 3;
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
+  }
+
+  /* The privacy select is the widest offender ("🌍 Public"). Let it
+     shrink instead of forcing the row wider. */
+  #post-privacy {
+    min-width: 0;
+    max-width: 8.5rem;
+    text-overflow: ellipsis;
+  }
+
+  #char-count { margin-left: 0; }
+
+  /* ── AI tools row: scroll sideways rather than overflow ──
+     Three pills plus the "AI:" label do not fit at this width, and
+     wrapping them onto three lines pushes the feed too far down. */
+  #post-input ~ div:last-child {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;                /* Firefox */
+    -webkit-overflow-scrolling: touch;
+  }
+  #post-input ~ div:last-child::-webkit-scrollbar { display: none; }
+  #post-input ~ div:last-child > * { flex-shrink: 0; }
+
+  /* Sensible starting height — autoResize() grows it from here. */
+  #post-input { min-height: 2.75rem; }
+}
+
+/* Very narrow phones: reclaim the avatar's width. */
+@media (max-width: 380px) {
+  #create-avatar { width: 2rem; height: 2rem; }
+}
+
+/* ════════════════════════════════════════════════════
+   2. BOTTOM NAV — fit and colour
+   In a justify-around flex row each item is sized by its own
+   label, so "Dormitory" and "Residents" steal width from their
+   neighbours and the row drifts off-centre. Auto-flow columns
+   give every item an identical slot.
+
+   grid-auto-columns is used rather than a fixed column count
+   because the nav has 7 items on feed.html and 5 on the other
+   pages — this adapts to both.
+   ════════════════════════════════════════════════════ */
+
+#mobile-nav {
+  /* Overrides the .flex / .justify-around utilities on the element —
+     an id selector outranks a class. */
+  display: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: end;
+  gap: 0.125rem;
+  padding: 0.375rem 0.125rem calc(env(safe-area-inset-bottom, 0px) + 0.375rem);
+  /* Lifts the bar off a light background and separates it from cards. */
+  box-shadow: 0 -1px 12px rgba(15, 23, 42, 0.06);
+}
+html.dark #mobile-nav { box-shadow: 0 -1px 12px rgba(0, 0, 0, 0.45); }
+
+@media (max-width: 768px) {
+  #mobile-nav { display: grid; }
+
+  /* app.css sets 60px, which is short once the safe-area inset is added
+     on a notched phone — the last row of feed content ends up under
+     the bar. */
+  body { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4.5rem); }
+}
+
+#mobile-nav > a {
+  min-width: 0;
+  padding: 0.3125rem 0.125rem;
+  border-radius: 0.75rem;
+  transition: background 0.15s, transform 0.12s;
+}
+#mobile-nav > a:active { transform: scale(0.94); }
+
+/* Labels get a fixed slot and truncate rather than wrap.
+   :not(.notif-badge) keeps the unread counters out of this. */
+#mobile-nav > a > span:not(.notif-badge) {
+  display: block;
+  width: 100%;
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#mobile-nav > a i { font-size: 1.0625rem; line-height: 1; }
+
+/* ── Per-item colour ──────────────────────────────────
+   Keyed to the Font Awesome icon class rather than nth-child, because
+   the nav has a different item count AND order on feed.html (Home,
+   Search, Dormitory, Residents, Messages, Alerts, Profile) than on
+   search/profile/notifications (Home, Search, Messages, Alerts,
+   Profile). Keying on the icon means each destination keeps its colour
+   everywhere, and adding or reordering items can't shuffle the palette.
+
+   Declared on the <i> directly so it beats the text-slate-400 colour
+   the anchor passes down by inheritance. */
+#mobile-nav a i.fa-house            { color: #2563eb; }  /* Home      — blue */
+#mobile-nav a i.fa-magnifying-glass { color: #0891b2; }  /* Search    — cyan */
+#mobile-nav a i.fa-building         { color: #4f46e5; }  /* Dormitory — indigo */
+#mobile-nav a i.fa-people-group     { color: #7c3aed; }  /* Residents — violet */
+#mobile-nav a i.fa-comment-dots     { color: #059669; }  /* Messages  — emerald */
+#mobile-nav a i.fa-bell             { color: #d97706; }  /* Alerts    — amber */
+#mobile-nav a i.fa-user             { color: #64748b; }  /* Profile   — slate */
+
+/* Brighter in dark mode — the 600-weight hues go muddy on #161b22. */
+html.dark #mobile-nav a i.fa-house            { color: #60a5fa; }
+html.dark #mobile-nav a i.fa-magnifying-glass { color: #22d3ee; }
+html.dark #mobile-nav a i.fa-building         { color: #818cf8; }
+html.dark #mobile-nav a i.fa-people-group     { color: #a78bfa; }
+html.dark #mobile-nav a i.fa-comment-dots     { color: #34d399; }
+html.dark #mobile-nav a i.fa-bell             { color: #fbbf24; }
+html.dark #mobile-nav a i.fa-user             { color: #94a3b8; }
+
+/* ── Active item ──────────────────────────────────────
+   Each page marks its own nav link with text-brand-600, so that class
+   is the active flag. Keeping the indicator as a tinted pill means the
+   colours above stay visible on every item while the current page
+   still reads as current. */
+#mobile-nav > a.text-brand-600 {
+  background: var(--brand-light);
+}
+#mobile-nav > a.text-brand-600 > span:not(.notif-badge) {
+  font-weight: 700;
+  color: var(--brand);
+}
+
+/* Unread badges sit above a taller icon now. */
+#mobile-nav .notif-badge { top: 0; right: 0.375rem; }
+
+/* ════════════════════════════════════════════════════
+   3. GENERAL MOBILE OVERFLOW GUARD
+   Nothing in the feed column should be able to scroll the
+   document sideways. Scoped to <main> so the fixed slide-over
+   panels are unaffected.
+   ════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  main { min-width: 0; }
+  main img, main video { max-width: 100%; }
+
+  /* Feed tabs (My Feed / Explore) — keep the touch target tall enough. */
+  #tab-feed, #tab-explore { padding-top: 0.6875rem; padding-bottom: 0.6875rem; }
+}

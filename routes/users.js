@@ -313,49 +313,128 @@ router.delete('/api/users/:id/follow-only', requireAuth, (req, res) => {
   res.json({ following: false, followerCount: getFollowerCount(req.params.id) });
 });
 
-// GET /api/users/me/dormitory — current user's bed assignment + billing
-router.get('/api/users/me/dormitory', requireAuth, (req, res) => {
+/**
+ * Dump the real column list of a table to the log.
+ *
+ * Used only on the failure path below. The most common cause of an
+ * unexplained 500 on a hand-written SELECT is a column that exists in the
+ * CREATE TABLE in utils/db.js but NOT in the deployed database — SQLite's
+ * CREATE TABLE IF NOT EXISTS is a no-op on an existing table, so a column
+ * added to that statement later never reaches a database that already
+ * existed. Printing what production actually has turns a mystery into a
+ * one-line diagnosis.
+ */
+function logTableColumns(table) {
   try {
-    const assignment = db.prepare(
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+    if (!cols.length) {
+      log.error(`[dorm]   ${table}: TABLE DOES NOT EXIST`);
+      return;
+    }
+    log.error(`[dorm]   ${table}: ${cols.map(c => c.name).join(', ')}`);
+  } catch (e) {
+    log.error(`[dorm]   ${table}: could not read schema — ${e.message}`);
+  }
+}
+
+// GET /api/users/me/dormitory — current user's bed assignment + billing
+//
+// Each section is queried in its own try block. A failure in billing or in the
+// GCash settings must not hide the resident's room number — before, any one
+// error threw out of a single try/catch and the whole widget rendered
+// "Could not load dormitory info." with nothing in the server log to explain
+// why, because the message was returned to the browser and never logged.
+router.get('/api/users/me/dormitory', requireAuth, (req, res) => {
+  const userId   = req.user?.id;
+  const warnings = [];
+
+  if (!userId) {
+    // Should be impossible behind requireAuth, but a silent undefined bind
+    // would otherwise produce a confusing empty result rather than an error.
+    log.error(`[dorm] /me/dormitory reached with no req.user.id — session shape: ${JSON.stringify(Object.keys(req.user || {}))}`);
+    res._errMsg = 'no req.user.id on an authenticated request';
+    return res.status(500).json({ error: 'Your session is missing a user id. Please log out and back in.' });
+  }
+
+  // ── 1. Bed assignment (the part the widget most needs) ────────────────
+  let assignment = null;
+  try {
+    assignment = db.prepare(
       'SELECT ba.bed_number, ba.assigned_at, ba.notes, ' +
       'dr.room_number, dr.gender, dr.capacity ' +
       'FROM bed_assignments ba ' +
       'JOIN dorm_rooms dr ON dr.id = ba.room_id ' +
       'WHERE ba.user_id = ?'
-    ).get(req.user.id);
-
-    // Full billing history with paid_at, notes, and receipt
-    const billing = db.prepare(
-      'SELECT id, status, month, amount, paid_at, notes, user_comment, receipt_url FROM dorm_billing WHERE user_id=? ORDER BY month DESC LIMIT 12'
-    ).all(req.user.id);
-
-    const hasBills = billing.length > 0;
-    const unpaidCount = billing.filter(b => b.status === 'unpaid' || b.status === 'overdue').length;
-
-    // GCash payment info set by admin
-    const { getSetting } = require('../utils/db');
-    const gcashQr     = getSetting('gcash_qr_url', '');
-    const gcashNumber = getSetting('gcash_number', '');
-
-    if (!assignment) {
-      return res.json({ assigned: false, billing, hasBills, unpaidCount, gcashQr, gcashNumber });
-    }
-    res.json({
-      assigned: true,
-      roomNumber: assignment.room_number,
-      bedNumber: assignment.bed_number,
-      gender: assignment.gender,
-      assignedAt: assignment.assigned_at,
-      notes: assignment.notes,
-      billing,
-      hasBills,
-      unpaidCount,
-      gcashQr,
-      gcashNumber,
-    });
+    ).get(userId);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    // This is the only genuinely fatal branch — without it there is no room
+    // number to show. Log loudly, with the actual schema, then fail.
+    log.error(`[dorm] Bed-assignment query FAILED for user ${userId}: ${err.message}`);
+    log.error('[dorm] Actual deployed schema:');
+    logTableColumns('bed_assignments');
+    logTableColumns('dorm_rooms');
+    res._errMsg = `bed-assignment query: ${err.message}`;
+    return res.status(500).json({
+      error: 'Could not read your room assignment.',
+      // Surfaced in development only — never leak SQL details in production.
+      detail: process.env.NODE_ENV !== 'production' ? err.message : undefined,
+    });
   }
+
+  // ── 2. Billing history (degrade gracefully) ───────────────────────────
+  let billing = [];
+  try {
+    billing = db.prepare(
+      'SELECT id, status, month, amount, paid_at, notes, user_comment, receipt_url ' +
+      'FROM dorm_billing WHERE user_id=? ORDER BY month DESC LIMIT 12'
+    ).all(userId);
+  } catch (err) {
+    log.error(`[dorm] Billing query failed for user ${userId}: ${err.message}`);
+    logTableColumns('dorm_billing');
+    warnings.push('billing');
+  }
+
+  const hasBills    = billing.length > 0;
+  const unpaidCount = billing.filter(b => b.status === 'unpaid' || b.status === 'overdue').length;
+
+  // ── 3. GCash payment info set by admin (degrade gracefully) ───────────
+  let gcashQr = '', gcashNumber = '';
+  try {
+    const { getSetting } = require('../utils/db');
+    gcashQr     = getSetting('gcash_qr_url', '') || '';
+    gcashNumber = getSetting('gcash_number', '') || '';
+  } catch (err) {
+    log.error(`[dorm] GCash settings lookup failed: ${err.message}`);
+    warnings.push('payment-info');
+  }
+
+  if (warnings.length) {
+    log.warn(`[dorm] /me/dormitory served with degraded sections for user ${userId}: ${warnings.join(', ')}`);
+  }
+
+  if (!assignment) {
+    // Not an error — the resident simply has no bed yet. Logged so an
+    // "admin says it's assigned but the widget says no" report is checkable.
+    log.dorm(`/me/dormitory — user ${userId} has NO bed_assignments row`);
+    return res.json({ assigned: false, billing, hasBills, unpaidCount, gcashQr, gcashNumber, warnings });
+  }
+
+  log.dorm(`/me/dormitory — user ${userId} → room ${assignment.room_number} bed ${assignment.bed_number} (${billing.length} bill(s), ${unpaidCount} unpaid)`);
+
+  res.json({
+    assigned: true,
+    roomNumber: assignment.room_number,
+    bedNumber: assignment.bed_number,
+    gender: assignment.gender,
+    assignedAt: assignment.assigned_at,
+    notes: assignment.notes,
+    billing,
+    hasBills,
+    unpaidCount,
+    gcashQr,
+    gcashNumber,
+    warnings,
+  });
 });
 
 // GET /api/users/dormitory/residents — all assigned residents (visible to authenticated users)
