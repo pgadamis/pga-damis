@@ -94,6 +94,7 @@
     <div class="nav-item" id="nav-community-dash" onclick="showTab('community-dash')"><i class="fa-solid fa-chart-pie w-4"></i>Overview</div>
     <div class="nav-item" id="nav-posts-pending" onclick="showTab('posts-pending')"><i class="fa-solid fa-clock w-4"></i>Post Queue <span id="pending-badge" class="ml-auto text-xs bg-amber-500 text-white rounded-full px-1.5 py-0.5 hidden">0</span></div>
     <div class="nav-item" id="nav-posts-all" onclick="showTab('posts-all')"><i class="fa-solid fa-newspaper w-4"></i>All Posts</div>
+    <div class="nav-item" id="nav-research" onclick="showTab('research'); loadResearchTab();"><i class="fa-solid fa-flask w-4"></i>Research</div>
 
     <div class="nav-section mt-2">System</div>
     <div class="nav-item" id="nav-logs" onclick="showTab('logs')"><i class="fa-solid fa-list-check w-4"></i>Audit Logs</div>
@@ -858,6 +859,72 @@
   </div>
 
   <!-- ═══ AI MODERATION LOG ═══ -->
+  <!-- ═══ RESEARCH — Student Residents Questionnaire ═══ -->
+  <div id="tab-research" class="tab-content">
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+      <div>
+        <h1 class="font-display font-bold text-2xl text-slate-900 dark:text-slate-100">Research</h1>
+        <p class="text-sm text-slate-400 mt-0.5">Student Residents Questionnaire &mdash; ISO/IEC 25010 system evaluation
+          <span class="text-slate-300 dark:text-slate-600">&middot;</span>
+          <span id="research-version" class="font-mono text-xs">&mdash;</span>
+        </p>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap">
+        <!-- Anonymize toggle — defaults ON, matching the study's commitment
+             that responses are anonymized during analysis. -->
+        <div class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2">
+          <div>
+            <p class="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5"><i class="fa-solid fa-user-secret text-brand-500"></i> Anonymize</p>
+            <p class="text-xs text-slate-400" id="research-anon-desc">On &mdash; names and emails hidden (R1, R2 &hellip;)</p>
+          </div>
+          <button id="research-anon-toggle" onclick="toggleResearchAnonymize()" role="switch"
+            class="relative w-12 h-6 rounded-full transition-colors duration-200 bg-brand-600 flex-shrink-0"
+            title="Hide respondent identities">
+            <span id="research-anon-thumb" class="absolute left-1 top-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200"></span>
+          </button>
+        </div>
+        <button onclick="exportResearchExcel()" class="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors"><i class="fa-solid fa-file-excel text-xs text-green-600"></i>Excel</button>
+        <button onclick="exportResearchPDF()" class="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors"><i class="fa-solid fa-file-pdf text-xs text-red-500"></i>PDF</button>
+        <button onclick="loadResearchTab()" class="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors"><i class="fa-solid fa-rotate text-xs"></i>Refresh</button>
+      </div>
+    </div>
+
+    <!-- Headline figures -->
+    <div id="research-headline" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
+
+    <!-- Per-characteristic summary (the Chapter 4 summary table) -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden mb-6">
+      <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+        <h2 class="font-semibold text-slate-800 dark:text-slate-100">Level of Acceptability by Quality Characteristic</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Weighted mean &Sigma;fx / N &middot; 4.21&ndash;5.00 Very Highly Acceptable &middot; 3.41&ndash;4.20 Highly Acceptable &middot; 2.61&ndash;3.40 Moderately Acceptable &middot; 1.81&ndash;2.60 Slightly Acceptable &middot; 1.00&ndash;1.80 Not Acceptable</p>
+      </div>
+      <div id="research-characteristics" class="overflow-x-auto"></div>
+    </div>
+
+    <!-- Per-item detail (the Chapter 4 item-analysis tables) -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 mb-6">
+      <h2 class="font-semibold text-slate-800 dark:text-slate-100 mb-1">Item Analysis</h2>
+      <p class="text-xs text-slate-400 mb-4">Frequency of each rating per statement, with the weighted mean (WM).</p>
+      <div id="research-items"></div>
+    </div>
+
+    <!-- Individual responses -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden mb-6">
+      <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+        <h2 class="font-semibold text-slate-800 dark:text-slate-100">Individual Responses</h2>
+        <p class="text-xs text-slate-400 mt-0.5">One row per respondent. Answers are kept even if the application is later rejected.</p>
+      </div>
+      <div id="research-responses" class="overflow-x-auto max-h-[520px]"></div>
+    </div>
+
+    <!-- Open-ended comments -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5">
+      <h2 class="font-semibold text-slate-800 dark:text-slate-100 mb-1">Comments &amp; Suggestions</h2>
+      <p class="text-xs text-slate-400 mb-4">Open-ended feedback, newest first.</p>
+      <div id="research-comments"></div>
+    </div>
+  </div>
+
   <div id="tab-ai-log" class="tab-content">
     <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
       <div>
@@ -1499,6 +1566,7 @@
 </div>
 
 <script src="/js/api.js"></script>
+<script src="/js/admin-research.js"></script>
 <script>
   let currentUser=null, allUsers=[], allPosts=[], statsChart=null, provChart=null;
   let _lastStats = null; // cached latest /api/admin/stats response

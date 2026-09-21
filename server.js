@@ -12,6 +12,7 @@
  *   - Dormitory bed assignment & billing management
  *   - Maintenance requests & utility bill tracking
  *   - User ban/unban, audit logging, real-time via Socket.IO
+ *   - Student Residents Questionnaire (ISO/IEC 25010 research instrument)
  */
 
 require('dotenv').config();
@@ -39,6 +40,7 @@ const notifRoutes        = require('./routes/notifications');
 const messagesRoutes     = require('./routes/messages');
 const adminRoutes        = require('./routes/admin');
 const aiRoutes           = require('./routes/ai');
+const researchRoutes     = require('./routes/research');
 
 const app        = express();
 const httpServer = http.createServer(app);
@@ -297,6 +299,7 @@ app.use('/', notifRoutes);
 app.use('/', messagesRoutes);
 app.use('/', adminRoutes);
 app.use('/', aiRoutes);
+app.use('/', researchRoutes);
 
 // ── Socket.io ─────────────────────────────────────────
 const onlineUsers = new Map(); // userId → socketId

@@ -1615,9 +1615,31 @@ async function completeRegistration() {
   if (!docs['enrollment']) { showStepError(5, 'Please upload your Certificate of Enrollment.'); return; }
   if (!$('chk-terms').checked) { showStepError(5, 'You must agree to the Terms & Conditions.'); return; }
 
+  // ── Student Residents Questionnaire (research instrument) ──────────────
+  // Every statement must be answered and consent given before the
+  // application can be submitted. Guarded on window.ResearchSurvey so a
+  // failure to load the module never hard-blocks a dormitory application.
+  var rsCheck = window.ResearchSurvey ? window.ResearchSurvey.validate() : { ok: true };
+  if (!rsCheck.ok) { showStepError(5, rsCheck.message); return; }
+
   var btn = $('btn-complete');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner mr-2"></span> Submitting application...';
+
+  // Save the questionnaire BEFORE the registration request. The server derives
+  // the respondent's email from req.session.pendingRegistration, and
+  // complete-registration deletes that on success — so this has to go first.
+  if (window.ResearchSurvey) {
+    btn.innerHTML = '<span class="spinner mr-2"></span> Saving questionnaire...';
+    var rsRes = await window.ResearchSurvey.submit();
+    if (!rsRes.ok) {
+      showStepError(5, rsRes.message || 'Could not save your questionnaire answers.');
+      btn.disabled = false;
+      btn.innerHTML = 'Submit Application <i class="fa-solid fa-paper-plane ml-1"></i>';
+      return;
+    }
+    btn.innerHTML = '<span class="spinner mr-2"></span> Submitting application...';
+  }
 
   try {
     var phoneRaw = $('reg-phone') ? $('reg-phone').value.trim() : '';
