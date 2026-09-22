@@ -69,7 +69,12 @@ window.ResidentSurvey = (function () {
       '.rsv-btn-primary:hover{background:#7e22ce}' +
       '.rsv-btn-ghost{background:transparent;color:#94a3b8}' +
       '.rsv-btn-ghost:hover{color:#64748b}' +
-      '.rsv-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:80;display:flex;align-items:flex-end;justify-content:center}' +
+      // z-index:100 — must clear #mobile-nav (z-index:90 in app.css), the
+      // fixed bottom bar shown under 768px. At 80 the nav bar sat on top
+      // of this overlay and covered the modal's bottom edge (including
+      // the Submit button) on phone-width viewports, with no way to
+      // scroll or tap through the opaque nav bar.
+      '.rsv-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:100;display:flex;align-items:flex-end;justify-content:center}' +
       '@media(min-width:640px){.rsv-modal-overlay{align-items:center}}' +
       '.rsv-modal{background:#fff;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:20px}' +
       '@media(min-width:640px){.rsv-modal{border-radius:20px;padding:24px}}' +
