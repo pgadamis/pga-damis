@@ -15,31 +15,43 @@
 
 /* ════════════════════════════════════════════════════
    1. COMPOSER — mobile overflow
-   The "Create Post" box lays its controls out in two
-   non-wrapping flex rows. Below ~640px the avatar (40px),
-   card padding (32px) and gaps leave roughly 300px for the
-   column, which the Photo + privacy + char-count + Post row
-   overruns — pushing the Post button past the card edge, and
-   the AI row's Tags pill with it.
 
-   Selectors hang off #post-input (the textarea) and its
-   siblings, so no markup change is needed. The composer
-   column's children, in document order:
-       textarea#post-input
-       div#img-preview-wrap
-       div.justify-between   <- controls row
-       div (last child)      <- AI tools row
+   Real DOM (public/feed.html):
+     div.rounded-2xl.p-4                    ← white card
+       div.flex.gap-3                       ← avatar + content row
+         img#create-avatar
+         div.flex-1                         ← content column
+           textarea#post-input
+           div#img-preview-wrap
+           div.flex.items-center.justify-between.mt-3   ← Row 1: Photo/Privacy/Post
+           div.flex.items-center.gap-2.mt-2.pt-2.border-t  ← Row 2: AI tools
+
+   THE ROOT CAUSE: div.flex-1 is a flex ITEM of div.flex.gap-3. Flex items
+   default to min-width:auto, which resolves to their content's min-content
+   size — for a column whose Row 2 contains three non-wrapping pill buttons,
+   that min-content size is wider than the phone screen. Because nothing
+   told .flex-1 it was allowed to shrink, its refusal dragged the whole
+   composer's rendered content past the card's own (correctly-sized) edge —
+   the card's box stayed the right width, but its content visually spilled
+   out of it. This is why it looked like "the box" wasn't containing things:
+   the box genuinely wasn't clipping — clipping was never the fix needed,
+   shrinking was.
+
+   Earlier CSS in this file already handled the two inner rows (wrapping
+   Row 1, scrolling Row 2) but stopped one level too shallow — it never
+   reached .flex-1, the actual ancestor causing the escape. Fixed below.
    ════════════════════════════════════════════════════ */
 
-/* Without min-width:0 a flex item refuses to shrink below its
-   content width, which is what lets the row escape the card. */
-#post-input,
-#post-input ~ div {
-  min-width: 0;
-  max-width: 100%;
-}
-
 @media (max-width: 640px) {
+
+  /* THE FIX: let .flex-1 actually shrink to the space .flex.gap-3 gives it,
+     instead of demanding room for its widest, unwrapped child.
+     Scoped with :has() to the one .flex-1 that is post-input's direct
+     parent — #post-input is a unique id, so this can never match any other
+     .flex-1 column elsewhere on the page (post cards, sidebars, etc.). */
+  div.flex-1:has(> #post-input) {
+    min-width: 0;
+  }
 
   /* ── Controls row: allow wrapping ── */
   #post-input ~ div.justify-between {
@@ -73,7 +85,9 @@
 
   /* ── AI tools row: scroll sideways rather than overflow ──
      Three pills plus the "AI:" label do not fit at this width, and
-     wrapping them onto three lines pushes the feed too far down. */
+     wrapping them onto three lines pushes the feed too far down.
+     This only works correctly now that .flex-1 above can shrink to a
+     definite width for this row to actually scroll within. */
   #post-input ~ div:last-child {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -86,6 +100,13 @@
 
   /* Sensible starting height — autoResize() grows it from here. */
   #post-input { min-height: 2.75rem; }
+
+  /* Belt-and-braces: the card itself should never show a horizontal
+     scrollbar or let anything bleed past its rounded corners, however
+     small a future edit to the composer might be. With .flex-1 fixed
+     above this should never trigger, but it costs nothing to have as a
+     hard backstop. */
+  div.rounded-2xl:has(#post-input) { overflow-x: hidden; }
 }
 
 /* Very narrow phones: reclaim the avatar's width. */

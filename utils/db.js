@@ -383,7 +383,6 @@ migrate(`ALTER TABLE posts ADD COLUMN moderated_by TEXT DEFAULT NULL`);    // 'a
 migrate(`ALTER TABLE posts ADD COLUMN ai_reviewed_at TEXT DEFAULT NULL`);  // set when AI reviews (even if no action taken)
 migrate(`ALTER TABLE comments ADD COLUMN parent_id TEXT DEFAULT NULL`);
 migrate(`ALTER TABLE messages ADD COLUMN image_url TEXT DEFAULT ''`);
-migrate(`ALTER TABLE dorm_billing ADD COLUMN user_comment TEXT DEFAULT ''`);
 migrate(`CREATE TABLE IF NOT EXISTS friendships (id TEXT PRIMARY KEY, user_a TEXT NOT NULL, user_b TEXT NOT NULL, status TEXT DEFAULT 'pending', requester TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')), UNIQUE(user_a, user_b))`);
 
 // ── PGA-DAMIS v1 migrations — new resident application fields ─────────
@@ -456,6 +455,16 @@ db.prepare(`CREATE TABLE IF NOT EXISTS dorm_billing (
   notes       TEXT DEFAULT '',
   UNIQUE(user_id, month)
 )`).run();
+// user_comment moved here from its old position (before this CREATE TABLE),
+// where ALTER TABLE dorm_billing ... ran against a table that did not exist
+// yet on the very first boot. migrate() only treats 'duplicate column name',
+// 'already exists' and 'no such table: sqlite_master' as expected-and-safe —
+// 'no such table: dorm_billing' matched none of those, so it logged as an
+// unexpected warning and the column was silently never added, permanently,
+// on every boot since (each boot re-ran the same ALTER-before-CREATE
+// sequence). receipt_url below was already correctly positioned after this
+// CREATE TABLE, which is why it — alone — made it into the live schema.
+migrate(`ALTER TABLE dorm_billing ADD COLUMN user_comment TEXT DEFAULT ''`);
 migrate(`ALTER TABLE users ADD COLUMN present_address    TEXT DEFAULT ''`);
 migrate(`ALTER TABLE users ADD COLUMN permanent_address  TEXT DEFAULT ''`);
 migrate(`ALTER TABLE users ADD COLUMN school_name        TEXT DEFAULT ''`);
