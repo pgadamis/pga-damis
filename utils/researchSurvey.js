@@ -2,20 +2,31 @@
  * utils/researchSurvey.js — Student Residents Questionnaire (research instrument)
  *
  * Single source of truth for the ISO/IEC 25010 end-user evaluation instrument
- * described in Chapter 2 of the capstone manuscript. The questionnaire spec
- * below is consumed by BOTH the applicant-facing form (public/js/research-survey.js,
+ * described in Chapter 2/3 of the capstone manuscript. The questionnaire spec
+ * below is consumed by BOTH the resident-facing feed card (public/js/resident-survey.js,
  * via GET /api/research/questionnaire) and the admin Research tab, so the wording
  * can never drift between what respondents answered and what gets reported.
+ *
+ * Delivery (v2 — see INSTRUMENT_VERSION below):
+ *   The manuscript specifies ONE end-user instrument, answered once, "after
+ *   [respondents] had interacted with and evaluated the system" — not a
+ *   registration-time form. It is delivered as a dismissible card pinned above
+ *   the resident's feed, becoming eligible as soon as the account/feed is
+ *   reachable (Home → Search → My Dormitory → Residents → Messages → Alerts →
+ *   Profile all count as "the system", not just registration). The retired
+ *   Step 5 mid-registration placement is gone from the UI; this module and the
+ *   submit endpoint are unchanged in shape so old rows and new rows share one
+ *   schema, but item wording below was broadened from "the application form"
+ *   to the system as a whole.
  *
  * Design notes:
  *   - The table lives in the same SQLite file as everything else, but this module
  *     owns it end-to-end (DDL + queries) instead of growing utils/db.js further.
  *     It borrows the shared better-sqlite3 handle so there is still exactly one
  *     connection, one WAL, one transaction scope.
- *   - Responses are keyed by EMAIL, not user id. The survey is submitted during
- *     Step 5 of registration, before the users row is guaranteed to exist, and it
- *     must survive an application being rejected — a rejected applicant's ratings
- *     are still valid research data. Identity is resolved by LEFT JOIN at read time.
+ *   - Responses are keyed by EMAIL, not user id, so a response is still valid
+ *     research data even if the account is later removed. Identity is resolved
+ *     by LEFT JOIN at read time.
  *   - Nothing derived is persisted. Per-characteristic means, the overall weighted
  *     mean and the acceptability interpretation are all computed on read, so a
  *     change to the interpretation scale never leaves stale numbers in the DB.
@@ -33,8 +44,14 @@ const log = require('./logger');
 /**
  * Bump this whenever item wording changes. Stored on every row so a mid-study
  * revision is detectable during analysis instead of silently mixing instruments.
+ *
+ * v2 (current): broadened from registration-only wording to system-wide
+ * wording, and moved from a Step 5 mid-registration form to a post-onboarding
+ * feed card. v1 rows (registration-scoped wording) remain in the table for
+ * audit purposes but should be analyzed separately — filter on
+ * instrument_version if mixing them would be misleading for a given table/figure.
  */
-const INSTRUMENT_VERSION = 'iso25010-student-resident-v1';
+const INSTRUMENT_VERSION = 'iso25010-resident-v2';
 
 const RESPONDENT_TYPE = 'student_resident';
 
@@ -77,21 +94,21 @@ const COMMENT_PROMPT =
   'Comments, problems encountered, or suggestions for improving the system (optional)';
 
 /**
- * Items are deliberately scoped to the part of the system the respondent has
- * actually used at this point — account creation, email verification, the
- * application form, and document upload. Asking an applicant to rate billing or
- * room assignment before they have ever seen those modules would produce
- * uninformed ratings and weaken the study's validity.
+ * Items are scoped to the system as a whole. By the time a resident sees this
+ * (the feed card, gated on the account existing) they have already gone
+ * through registration, OTP verification, and the application — and typically
+ * the feed, messages, and My Dormitory as well — so statements can reference
+ * the full experience instead of registration alone.
  */
 const CHARACTERISTICS = [
   {
     code: 'FS',
     name: 'Functional Suitability',
-    description: 'The system provides the functions needed to complete a dormitory application.',
+    description: 'The system provides the functions residents and applicants need.',
     items: [
-      { code: 'FS1', text: 'The online application form provided all the fields and requirements needed to complete my dormitory application.' },
-      { code: 'FS2', text: 'The system correctly did what I expected it to do at every step of the application.' },
-      { code: 'FS3', text: 'The document upload feature accepted and processed my required documents as intended.' },
+      { code: 'FS1', text: 'The system provided all the functions I needed — from applying and uploading documents to using my dormitory features (billing, maintenance requests, incident reports, the feed).' },
+      { code: 'FS2', text: 'The system correctly did what I expected it to do at every step, from my application through day-to-day use.' },
+      { code: 'FS3', text: 'Document uploads, requests, and reports I submitted through the system were accepted and processed as intended.' },
     ],
   },
   {
@@ -99,8 +116,8 @@ const CHARACTERISTICS = [
     name: 'Performance Efficiency',
     description: 'The system responds and completes tasks within a reasonable time.',
     items: [
-      { code: 'PE1', text: 'The system responded quickly when I moved between the steps of the application.' },
-      { code: 'PE2', text: 'Pages and file uploads finished loading within a reasonable amount of time.' },
+      { code: 'PE1', text: 'The system responded quickly when I moved between pages and features.' },
+      { code: 'PE2', text: 'Pages, uploads, and updates (posts, requests, messages) finished loading within a reasonable amount of time.' },
       { code: 'PE3', text: 'The system ran smoothly without slowing down or freezing while I was using it.' },
     ],
   },
@@ -110,8 +127,8 @@ const CHARACTERISTICS = [
     description: 'The system is easy to understand, learn and operate.',
     items: [
       { code: 'US1', text: 'The system was easy to learn and use without needing someone to assist me.' },
-      { code: 'US2', text: 'The labels, instructions and error messages were clear and easy to understand.' },
-      { code: 'US3', text: 'The layout and design made it easy to find what I needed.' },
+      { code: 'US2', text: 'The labels, instructions and error messages were clear and easy to understand throughout the system.' },
+      { code: 'US3', text: 'The layout and design made it easy to find what I needed, whether applying, checking my dormitory, or using the feed.' },
     ],
   },
   {
@@ -119,9 +136,9 @@ const CHARACTERISTICS = [
     name: 'Reliability',
     description: 'The system performs consistently and recovers from user errors.',
     items: [
-      { code: 'RE1', text: 'The system worked consistently without crashing or losing the information I had already entered.' },
+      { code: 'RE1', text: 'The system worked consistently without crashing or losing information I had already entered.' },
       { code: 'RE2', text: 'When I entered something incorrectly, the system told me and let me correct it without starting over.' },
-      { code: 'RE3', text: 'I was able to finish my application without technical interruptions.' },
+      { code: 'RE3', text: 'I was able to complete tasks (applying, paying bills, filing requests, posting) without technical interruptions.' },
     ],
   },
   {
@@ -139,7 +156,7 @@ const CHARACTERISTICS = [
     name: 'Portability',
     description: 'The system can be accessed and used across devices and browsers.',
     items: [
-      { code: 'PO1', text: 'The system worked properly on the device I used to apply.' },
+      { code: 'PO1', text: 'The system worked properly on the device(s) I used, both while applying and afterward as a resident.' },
       { code: 'PO2', text: 'The system displayed correctly on my screen size without difficulty.' },
       { code: 'PO3', text: 'I was able to access the system using my usual web browser without installing anything.' },
     ],
@@ -339,10 +356,21 @@ function saveResponse({ email, fullName = '', answers, comments = '', consentGiv
   return { id, email: mail, ...score };
 }
 
+/**
+ * Checked against the CURRENT instrument version, not "any row exists".
+ * A respondent who only answered the old v1 (registration-scoped) wording
+ * has not answered the current instrument — the feed card should still
+ * prompt them. Submitting through the card upserts their existing row
+ * (same email) to instrument_version = current, so this naturally stops
+ * re-prompting once they've done the current instrument, without creating
+ * a second row per person.
+ */
 function hasResponded(email) {
   const mail = normalizeEmail(email);
   if (!mail) return false;
-  return !!db.prepare('SELECT 1 FROM research_survey_responses WHERE email = ?').get(mail);
+  return !!db.prepare(
+    'SELECT 1 FROM research_survey_responses WHERE email = ? AND instrument_version = ?'
+  ).get(mail, INSTRUMENT_VERSION);
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -438,7 +466,17 @@ function getResponses({ anonymize = false } = {}) {
  * each rating is a weight, each respondent contributes one frequency count.
  */
 function getStats() {
-  const rows = db.prepare('SELECT id, answers FROM research_survey_responses').all();
+  // Scoped to the CURRENT instrument version. v1 (registration-scoped
+  // wording) and v2 (system-wide wording) answer the same item codes with
+  // different statements — averaging them together would silently blend two
+  // different questions into one number. A legacyCount is still surfaced so
+  // it's visible in the admin tab rather than swept under the rug.
+  const rows = db.prepare(
+    'SELECT id, answers FROM research_survey_responses WHERE instrument_version = ?'
+  ).all(INSTRUMENT_VERSION);
+  const legacyCount = db.prepare(
+    'SELECT COUNT(*) AS c FROM research_survey_responses WHERE instrument_version != ?'
+  ).get(INSTRUMENT_VERSION).c;
   const parsed = rows.map(r => parseRow(r).answers);
   const n = parsed.length;
 
@@ -494,6 +532,7 @@ function getStats() {
   return {
     instrumentVersion:   INSTRUMENT_VERSION,
     respondentCount:     n,
+    legacyRespondentCount: legacyCount, // answered an older instrument version — excluded above
     itemCount:           ITEM_CODES.length,
     scale:               SCALE,
     interpretationScale: INTERPRETATION_SCALE,

@@ -102,6 +102,9 @@
 </div>
 <div id="notif-overlay" onclick="toggleNotifPanel()" class="hidden fixed inset-0 bg-black/20 z-40"></div>
 
+<!-- Student Residents Questionnaire modal host (resident-survey.js) -->
+<div id="resident-survey-modal"></div>
+
 <!-- ═══ LAYOUT ═══ -->
 <div class="max-w-6xl mx-auto px-4 pt-[76px] pb-20 md:pb-8 flex gap-6">
 
@@ -134,6 +137,10 @@
 
   <!-- FEED COLUMN -->
   <main class="flex-1 min-w-0 space-y-4">
+    <!-- Student Residents Questionnaire — dismissible card, filled by
+         resident-survey.js when the resident hasn't answered yet. -->
+    <div id="resident-survey-card"></div>
+
     <!-- Create Post -->
     <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4">
       <div class="flex gap-3">
@@ -379,6 +386,7 @@
 </div>
 
 <script src="/js/api.js"></script>
+<script src="/js/resident-survey.js"></script>
 <script>
   dayjs.extend(dayjs_plugin_relativeTime);
   // Facebook-style time: "Today at 10:22 AM", "Yesterday at 3:15 PM", "March 20 at 9:00 AM"
@@ -437,6 +445,7 @@
     }
     await Promise.all([loadFeed(),loadSuggested(),loadFollowRequests(),loadNavCounts()]);
     // Dormitory data loads lazily when panel is opened (improves initial page load)
+    if (window.ResidentSurvey) ResidentSurvey.init(); // fire-and-forget, never blocks feed load
   }
 
   // ── Dormitory Widget ───────────────────────────────────────────────────

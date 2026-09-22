@@ -2,19 +2,25 @@
  * public/sw.js — PGA-DAMIS Service Worker
  *
  * Strategy:
- *  - Static assets (CSS, fonts, manifest): Cache-first (fast loads)
+ *  - Static assets (CSS, fonts, manifest): Stale-while-revalidate — serves the
+ *    cached copy instantly, then re-fetches in the background and overwrites
+ *    the cache, so a CSS deploy reaches the browser on the very next load
+ *    without needing a manual CACHE_VERSION bump.
  *  - JS files: Network-first (always fresh — avoids stale code bugs)
- *  - HTML pages: Network-first with offline fallback
+ *  - HTML pages: not intercepted — pass through natively
  *  - API calls: Network-only (always fresh)
  *
- * IMPORTANT: Bump CACHE_VERSION any time you deploy to force clients
- * to discard old caches and re-fetch all assets.
+ * IMPORTANT: Bump CACHE_VERSION any time you change STATIC_ASSETS itself
+ * (add/remove a precached file) or need to force a one-time hard reset of
+ * every client's cache. Routine CSS/asset content changes no longer need a
+ * bump — stale-while-revalidate picks them up automatically.
  */
 
-const CACHE_VERSION = 'pgadamis-v1';
+const CACHE_VERSION = 'pgadamis-v2';
 const STATIC_ASSETS = [
   '/css/app.css',
   '/css/auth.css',
+  '/css/polish.css',
   '/manifest.json',
   // NOTE: JS files intentionally excluded — they use network-first so
   // updates are always picked up without requiring a cache version bump.
@@ -79,17 +85,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // CSS/fonts/images: cache-first
+  // CSS/fonts/images: stale-while-revalidate — serve the cached copy
+  // instantly (same speed as cache-first), but always re-fetch in the
+  // background and overwrite the cache so the NEXT load already has the
+  // latest deploy. This is what actually fixes the "CSS fix isn't showing
+  // up" class of bug: cache-first never asks the network again once a URL
+  // is cached, so a deploy could ship correctly and still never be seen.
   event.respondWith(
     caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((res) => {
+      const fetchAndUpdate = fetch(request).then((res) => {
         if (res.ok) {
           const clone = res.clone();
           caches.open(CACHE_VERSION).then((cache) => cache.put(request, clone));
         }
         return res;
-      });
+      }).catch(() => cached);
+
+      return cached || fetchAndUpdate;
     })
   );
 });

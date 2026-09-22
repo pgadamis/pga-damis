@@ -1615,31 +1615,19 @@ async function completeRegistration() {
   if (!docs['enrollment']) { showStepError(5, 'Please upload your Certificate of Enrollment.'); return; }
   if (!$('chk-terms').checked) { showStepError(5, 'You must agree to the Terms & Conditions.'); return; }
 
-  // ── Student Residents Questionnaire (research instrument) ──────────────
-  // Every statement must be answered and consent given before the
-  // application can be submitted. Guarded on window.ResearchSurvey so a
-  // failure to load the module never hard-blocks a dormitory application.
-  var rsCheck = window.ResearchSurvey ? window.ResearchSurvey.validate() : { ok: true };
-  if (!rsCheck.ok) { showStepError(5, rsCheck.message); return; }
+  // NOTE: the Student Residents Questionnaire used to be required here before
+  // an application could be submitted. It has moved to a dismissible card on
+  // the resident's feed (public/js/resident-survey.js) — see
+  // utils/researchSurvey.js for why: the manuscript's instrument is meant to
+  // be answered "after [respondents] had interacted with and evaluated the
+  // system", which an applicant at this step has not yet done, and gating a
+  // dormitory application on an unrelated research survey ran against the
+  // instrument's own consent statement ("has NO effect on the outcome of
+  // your dormitory application").
 
   var btn = $('btn-complete');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner mr-2"></span> Submitting application...';
-
-  // Save the questionnaire BEFORE the registration request. The server derives
-  // the respondent's email from req.session.pendingRegistration, and
-  // complete-registration deletes that on success — so this has to go first.
-  if (window.ResearchSurvey) {
-    btn.innerHTML = '<span class="spinner mr-2"></span> Saving questionnaire...';
-    var rsRes = await window.ResearchSurvey.submit();
-    if (!rsRes.ok) {
-      showStepError(5, rsRes.message || 'Could not save your questionnaire answers.');
-      btn.disabled = false;
-      btn.innerHTML = 'Submit Application <i class="fa-solid fa-paper-plane ml-1"></i>';
-      return;
-    }
-    btn.innerHTML = '<span class="spinner mr-2"></span> Submitting application...';
-  }
 
   try {
     var phoneRaw = $('reg-phone') ? $('reg-phone').value.trim() : '';

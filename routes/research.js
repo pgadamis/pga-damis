@@ -2,20 +2,22 @@
  * routes/research.js — Student Residents Questionnaire API
  *
  * Public:
- *   GET  /api/research/questionnaire     instrument spec for the Step 5 form
- *   POST /api/research/survey            submit answers (OTP-verified session or logged-in user)
+ *   GET  /api/research/questionnaire     instrument spec, rendered by the feed card's modal
+ *   POST /api/research/survey            submit answers (logged-in resident)
  *
  * Admin:
  *   GET  /api/admin/research/stats       aggregate weighted means + interpretations
  *   GET  /api/admin/research/responses   individual responses (optionally anonymized)
  *
- * Why the submit route is session-gated rather than open:
- *   The questionnaire is answered during registration Step 5, before an account
- *   exists, so there is no logged-in user to authenticate. Instead we require the
- *   same proof the registration endpoint requires — a session whose
- *   pendingRegistration has already cleared email OTP verification. That makes the
- *   email in the row server-derived and not client-supplied, so the dataset cannot
- *   be stuffed with responses for arbitrary addresses.
+ * Delivery: a dismissible card pinned above the feed (public/js/resident-survey.js),
+ * eligible as soon as the account/feed is reachable. The email in the row is
+ * server-derived from req.user, not client-supplied, so the dataset cannot be
+ * stuffed with responses for arbitrary addresses.
+ *
+ * The pendingRegistration (pre-account, OTP-verified session) path below is kept
+ * for backward compatibility with any in-flight registration session from before
+ * this endpoint moved off Step 5 — the current UI no longer renders a form that
+ * takes it. New submissions come from req.user.email.
  */
 
 'use strict';
@@ -77,8 +79,9 @@ function send500(res, err, label = '') {
 
 /**
  * GET /api/research/questionnaire
- * Unauthenticated on purpose — the registration page that renders this form is
- * itself unauthenticated. The payload is static instrument text, no user data.
+ * Left unauthenticated on purpose — the payload is static instrument text with
+ * no user data, and keeping it open avoids coupling the questionnaire spec to
+ * session state.
  */
 router.get('/api/research/questionnaire', (req, res) => {
   try {
@@ -148,8 +151,9 @@ router.post('/api/research/survey', (req, res) => {
 
 /**
  * GET /api/research/survey/status
- * Lets the Step 5 form skip re-prompting if this session already submitted
- * (e.g. the applicant hit Back then Submit again).
+ * Lets the feed card decide whether to render at all — checked server-side
+ * (not just via the client's snooze timestamp) so a resident who already
+ * completed the survey on another device never sees the card again.
  */
 router.get('/api/research/survey/status', (req, res) => {
   try {
