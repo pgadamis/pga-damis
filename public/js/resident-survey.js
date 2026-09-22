@@ -184,8 +184,8 @@ window.ResidentSurvey = (function () {
 
   function renderScaleLegend() {
     var cells = spec.scale.map(function (s) {
-      return '<div style="text-align:center"><div style="font-weight:800;font-size:11px;color:#64748b">' + s.value + '</div>' +
-        '<div style="font-size:9px;color:#94a3b8">' + esc(s.short) + '</div></div>';
+      return '<div style="text-align:center"><div style="font-weight:800;font-size:12px;color:#64748b">' + s.value + '</div>' +
+        '<div style="font-size:8px;line-height:1.2;color:#94a3b8;margin-top:2px">' + esc(s.label) + '</div></div>';
     }).join('');
     return '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:10px 0;padding:8px;background:#f8fafc;border-radius:10px">' + cells + '</div>';
   }

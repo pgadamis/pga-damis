@@ -83,19 +83,18 @@
 
   #char-count { margin-left: 0; }
 
-  /* ── AI tools row: scroll sideways rather than overflow ──
-     Three pills plus the "AI:" label do not fit at this width, and
-     wrapping them onto three lines pushes the feed too far down.
-     This only works correctly now that .flex-1 above can shrink to a
-     definite width for this row to actually scroll within. */
+  /* ── AI tools row: wrap instead of scroll ──
+     Three pills plus the "AI:" label do not fit on one line at this
+     width. A previous version tried horizontal scroll here, but that has
+     no visible affordance — it just looks like "Tags" is cut off and
+     missing, because nothing on screen hints there's more to the right.
+     Wrapping guarantees every button is always fully visible, at the
+     cost of a slightly taller composer on the narrowest phones — visible
+     beats compact here. */
   #post-input ~ div:last-child {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: none;                /* Firefox */
-    -webkit-overflow-scrolling: touch;
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
   }
-  #post-input ~ div:last-child::-webkit-scrollbar { display: none; }
   #post-input ~ div:last-child > * { flex-shrink: 0; }
 
   /* Sensible starting height — autoResize() grows it from here. */
